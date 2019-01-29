@@ -1,0 +1,9 @@
+chardet==3.0.4
+lxml==4.2.5
+python-magic==0.4.15
+requests==2.19.1
+sqlalchemy==1.2.12
+unidecode==1.0.23
+psycopg2-binary==2.7.6.1
+multiprocess==0.70.6.1
+nltk==3.3

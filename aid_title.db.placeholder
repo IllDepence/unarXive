@@ -1,0 +1,26 @@
+The title lookup data base for arXiv.org submission IDs has to look as
+indicated below.
+
+SQLite example:
+
+$ sqlite3 aid_title.db
+SQLite version 3.22.0 2018-01-22 18:45:57
+Enter ".help" for usage hints.
+sqlite> .schema
+CREATE TABLE paper (
+    id INTEGER NOT NULL,
+    aid VARCHAR(36),
+    title TEXT,
+    PRIMARY KEY (id)
+);
+sqlite> select * from paper limit 1;
+1|1103.3880|C*-algebras associated with some second order differential operators
+
+
+Note 1: Because SQLAlchemy is used to access the data base, you're relatively
+free in your choice of data base system and only have to adjust the data base
+URL in the code. For reference, see:
+    https://docs.sqlalchemy.org/en/latest/core/engines.html#database-urls)
+
+Note 2: For bulk access to arXiv metadata see:
+    https://arxiv.org/help/bulk_data

@@ -1,0 +1,11 @@
+retrieved from refs.db as shown below:
+
+select b.bibitem_string, m.mag_id
+    from bibitem as b
+        join
+         (select *
+            from bibitemmagidmap
+                order by random()
+                limit 300
+         ) as m
+        on b.uuid = m.uuid;
