@@ -1,6 +1,6 @@
 # unarXive
 
-Code for generating a data set for citation based tasks using arXiv.org submissions.
+Code for generating a data set for citation based tasks using arXiv.org submissions. ([data set on Zenodo](https://zenodo.org/record/2553523))
 
 ### Prerequisites
 * software
