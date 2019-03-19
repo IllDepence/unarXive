@@ -9,7 +9,7 @@ Code for generating a data set for citation based tasks using arXiv.org submissi
     * [Neural ParsCit](https://github.com/WING-NUS/Neural-ParsCit)
 * data
     * arXiv source files: see [arXiv.org help - arXiv Bulk Data Access](https://arxiv.org/help/bulk_data)
-    * MAG DB: see file `doc/MAG_DB_schema`
+    * [MAG](https://www.microsoft.com/en-us/research/project/microsoft-academic-graph/) DB: see file `doc/MAG_DB_schema`
     * arXiv title lookup DB: see file `aid_title.db.placeholder`
 
 ### Setup
