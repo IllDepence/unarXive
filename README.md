@@ -39,3 +39,23 @@ Code for generating a data set for citation based tasks using arXiv.org submissi
 
 ### Matching evaluation
 For a manual evaluation of the reference resolution (`match_bibitems_mag.py`) we performed on a sample of 300 matchings, see `doc/matching_evaluation/`.
+
+### Cite as
+
+```
+@inproceedings{Saier2019BIR,
+  author        = {Tarek Saier and
+                   Michael F{\"{a}}rber},
+  title         = {{Bibliometric-Enhanced arXiv: A Data Set for Paper-Based and
+                   Citation-Based Tasks}},
+  booktitle     = {Proceedings of the 8th International Workshop on
+                   Bibliometric-enhanced Information Retrieval (BIR) co-located
+                   with the 41st European Conference on Information Retrieval
+                   (ECIR 2019)},
+  pages         = {14--26},
+  year          = {2019},
+  month         = apr,
+  location      = {Cologne, Germany},
+  url           = {http://ceur-ws.org/Vol-2345/paper2.pdf}
+}
+```
