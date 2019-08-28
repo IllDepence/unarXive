@@ -1,0 +1,305 @@
+n = no, incorrect link
+y = yes, correct link
+_* = not clear cut cases (see comment)
+_- = not in the MAG anymore as of Aug 2019
+
+0: y
+1: y
+2: y
+3: y
+4: y
+5: y
+6: y
+7: y
+8: y* (citation actually is for 1559759106, which is contained in the given 207889878)
+9: y
+10: n (checked all source versions provided in MAG)
+11: y
+12: y
+13: y
+14: y
+15: y
+16: y
+17: y
+18: y
+19: y
+20: y
+21: y
+22: y
+23: y
+24: y
+25: y
+26: y
+27: y
+28: y
+29: y
+30: y
+31: y
+32: y
+33: y
+34: y
+35: y
+36: y
+37: y
+38: y
+39: y* (not in arXive version but in journal version, as reflected in MAG)
+40: y
+41: n (citation is in thesis by Zhi Xu, but not in paper py Kao, Shallit and Xu, which 1504647293 describes)
+42: y
+43: y
+44: y
+45: y
+46: y
+47: y
+48: y
+49: y
+50: y
+51: y
+52: y
+53: y* (citation in journal version of paper but not arXiv version)
+54: y
+55: y
+56: y
+57: y
+58: y
+59: y
+60: y
+61: n (cites 2316271461 and not follow up publication 2141548614)
+62: y
+63: y* (citation only in jounal version (55 citations) and not in arXiv version (12 citations))
+64: y
+65: y* (citation only in journal version)
+66: y
+67: y
+68: y
+69: n (checked all sources given in MAG)
+70: y
+71: y
+72: n (checked all sources given in MAG)
+73: y
+74: y* (citation only present in journal version 2964102765 and not arXiv version 1883430521, difference correctly reflected in data)
+75: y
+76: y
+77: y
+78: n ([5] has same title but different author & year. MAG cotains 3 papers with same title 2114191791, 220596585, 1563676811, none of which are by L.B. Klebanov or from 2013)
+79: y
+80: y
+81: y
+82: y
+83: y
+84: y
+85: y
+86: y
+87: y
+88: y
+89: y
+90: y
+91: y
+92: y
+93: y* (citation only in journal version)
+94: y
+95: y
+96: y
+97: y
+98: y
+99: n (cites 189 while MAG lists 212, checked all sources given in MAG)
+100: y
+101: y
+102: y
+103: y
+104: y
+105: y
+106: y
+107: y
+108: y
+109: y
+110: y
+111: y
+112: y
+113: y
+114: y
+115: y
+116: y
+117: y
+118: y
+119: y
+120: y
+121: n (cites 61 while MAG lists 66; springer version cites 67, [49] in there cites 2040389350 and not 2094133944 (share some authors, both Phys. Rev. A 76))
+122: y
+123: y
+124: y
+125: y
+126: y
+127: y
+128: n-
+129: y
+130: y (cites arXiv preprint whereas both MAG versions are dated later (1 and 3 years))
+131: y
+132: y* (only in Version hosted at sciencedirect.com, not arXiv)
+133: y
+134: y
+135: y
+136: y
+137: y
+138: y
+139: y
+140: y
+141: y
+142: y
+143: y
+144: y* (cites journal version instead of arXiv version which 1668258826 designates)
+145: y
+146: y
+147: y (author forgot article "a" in title of referene item)
+148: y
+149: y
+150: 
+151: 
+152: 
+153: 
+154: 
+155: 
+156: 
+157: 
+158: 
+159: 
+160: 
+161: 
+162: 
+163: 
+164: 
+165: 
+166: 
+167: 
+168: 
+169: 
+170: 
+171: 
+172: 
+173: 
+174: 
+175: 
+176: 
+177: 
+178: 
+179: 
+180: 
+181: 
+182: 
+183: 
+184: 
+185: 
+186: 
+187: 
+188: 
+189: 
+190: 
+191: 
+192: 
+193: 
+194: 
+195: 
+196: 
+197: 
+198: 
+199: 
+200: 
+201: 
+202: 
+203: 
+204: 
+205: 
+206: 
+207: 
+208: 
+209: 
+210: 
+211: 
+212: 
+213: 
+214: 
+215: 
+216: 
+217: 
+218: 
+219: 
+220: 
+221: 
+222: 
+223: 
+224: 
+225: 
+226: 
+227: 
+228: 
+229: 
+230: 
+231: 
+232: 
+233: 
+234: 
+235: 
+236: 
+237: 
+238: 
+239: 
+240: 
+241: 
+242: 
+243: 
+244: 
+245: 
+246: 
+247: 
+248: 
+249: 
+250: 
+251: 
+252: 
+253: 
+254: 
+255: 
+256: 
+257: 
+258: 
+259: 
+260: 
+261: 
+262: 
+263: 
+264: 
+265: 
+266: 
+267: 
+268: 
+269: 
+270: 
+271: 
+272: 
+273: 
+274: 
+275: 
+276: 
+277: 
+278: 
+279: 
+280: 
+281: 
+282: 
+283: 
+284: 
+285: 
+286: 
+287: 
+288: 
+289: 
+290: 
+291: 
+292: 
+293: 
+294: 
+295: 
+296: 
+297: 
+298: 
+299: 

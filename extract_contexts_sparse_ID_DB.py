@@ -1,7 +1,8 @@
-""" Extract contexts from the unarXive data set.
+""" Extract contexts from the unarXive data set where ID mappings have not
+    been extended yet (i.e. only arXiv IDs on the citing side and only MAG
+    IDs on the cited side).
 """
 
-import argparse
 import json
 import os
 import re
@@ -98,7 +99,7 @@ def clean_window_distance_words(adfix, num_words, backwards=False):
     return win_dist
 
 
-def find_adjacent_citations(adfix, uuid_ctd_mid_map, backwards=False):
+def find_adjacent_citations(adfix, uuid_mid_map, backwards=False):
     """ Given text after or before a citation, find all directly adjacent
         citations.
     """
@@ -111,66 +112,125 @@ def find_adjacent_citations(adfix, uuid_ctd_mid_map, backwards=False):
     if not match:
         return []
     uuid = match.group(1)
-    if uuid not in uuid_ctd_mid_map:
+    if uuid not in uuid_mid_map:
         return []
-    id_tuple = uuid_ctd_mid_map[uuid]
+    aid = uuid_mid_map[uuid]
     margin = perimeter.index(match.group(0))
     if backwards:
         adfix = adfix[:-(50-margin)]
     else:
         adfix = adfix[45+margin:]
-    moar = find_adjacent_citations(adfix, uuid_ctd_mid_map, backwards=backwards)
-    return [id_tuple] + moar
+    moar = find_adjacent_citations(adfix, uuid_mid_map, backwards=backwards)
+    return [aid] + moar
 
 
-def context_sentences(pre, post, num_sent_pre, num_sent_post):
-    """ Return context w/ specified number of sentences before and after the
-        citing sentence.
+def window_distance_sentences(prefix, postfix, num_sentences):
+    """ Return the window distance that includes <num_sentences> sentences.
+
+        (Go heuristically by periods and then check properly.)
     """
 
-    cit_marker = 'MAINCIT'
-    text = '{} {} {}'.format(pre, cit_marker, post)
+    directional_margin = int((num_sentences-1)/2)
+    safety_multiplier = 3
+    pre_end = False
+    post_end = False
+    window_found = False
 
-    sentences_pre = []
-    citing_sentence = None
-    sentences_post = []
-    passed_middle = False
+    while not window_found and not (pre_end and post_end):
+        dots_to_pass = (directional_margin + 1) * safety_multiplier
+        pre = ''
+        post = ''
+        for backwards in [True, False]:
+            if backwards:
+                adfix = prefix
+            else:
+                adfix = postfix
+            num_dots = 0
+            win_dist = 0
+            if backwards:
+                start = len(adfix) - 1
+                end = 0
+                delta = -1
+            else:
+                start = 0
+                end = len(adfix) - 1
+                delta = 1
+            pos = start
+            while num_dots < dots_to_pass:
+                if backwards and pos <= end:
+                    break
+                if not backwards and pos >= end:
+                    break
+                char = adfix[pos]
+                if char == '.':
+                    num_dots += 1
+                win_dist += 1
+                pos += delta
 
-    for sentence in tokenizer.tokenize(text):
-        if not passed_middle and cit_marker in sentence:
-            citing_sentence = sentence
-            passed_middle = True
-            continue
-        if not passed_middle:
-            sentences_pre.append(sentence)
+            if backwards and pos+delta <= end:
+                pre_end = True
+            if not backwards and pos+delta >= end:
+                post_end = True
+
+            if backwards:
+                win_dist -= 1  # cut the dot
+                pre = adfix[-win_dist:]
+            else:
+                post = adfix[:win_dist]
+        cit_marker = 'TMP\u200CCIT'
+        tmp_cut = '{}{}{}'.format(pre, cit_marker, post)
+
+        sentences_pre = []
+        sentence_mid = None
+        sentences_post = []
+        passed_middle = False
+        for sent_idx, sent_edx in tokenizer.span_tokenize(tmp_cut):
+            sentence = tmp_cut[sent_idx:sent_edx]
+            if cit_marker in sentence:
+                sentence_mid = sentence
+                passed_middle = True
+                continue
+            if not passed_middle:
+                dist_to_marker = len(pre) - sent_idx
+                sentences_pre.append((sentence, dist_to_marker))
+            else:
+                dist_to_marker = sent_edx - (len(pre) + len(cit_marker))
+                sentences_post.append((sentence, dist_to_marker))
+
+        if len(sentences_pre) >= directional_margin and \
+                len(sentences_post) >= directional_margin:
+            window_found = True
         else:
-            sentences_post.append(sentence)
-            if len(sentences_post) >= num_sent_post:
-                break
+            safety_multiplier *= 3
 
-    if num_sent_pre > 0:
-        pre_s = sentences_pre[-num_sent_pre:]
+    m = re.search(cit_marker, sentence_mid)
+    sentence_mid_pre_part_length = m.start()
+    sentence_mid_post_part_length = len(sentence_mid) - m.end()
+    if len(sentences_pre) >= directional_margin:
+        sentences_pre_dist = sentences_pre[-directional_margin][1] - \
+                                                sentence_mid_pre_part_length
     else:
-        pre_s = []
-    if num_sent_post >= 0:
-        post_s = sentences_post[:num_sent_post]
+        sentences_pre_dist = len(prefix)
+    if len(sentences_post) >= directional_margin:
+        sentences_post_dist = sentences_post[directional_margin-1][1] - \
+                                                sentence_mid_post_part_length
     else:
-        post_s = []
-    sentences = pre_s + [citing_sentence] + post_s
+        sentences_post_dist = len(postfix)
+    pre_dist = sentences_pre_dist + m.start()
+    post_dist = sentences_post_dist + (len(sentence_mid) - m.end())
+    return pre_dist, post_dist
 
-    return ' '.join(sentences)
 
-
-def generate(in_dir, db_uri, context_margin_unit, context_margin_pre,
-             context_margin_post, min_contexts, min_citing_docs,
-             sample_size, output_file):
+def generate(in_dir, db_uri=None, context_size=3, context_size_unit='s',
+             min_contexts=1, min_citing_docs=1, with_placeholder=True,
+             sample_size=-1):
     """ Generate a list of citation contexts, given criteria:
-            context_margin_unit (s=setences, w=words)
-            context_margin_pre
-            context_margin_post
+            context_size
+            context_size_unit (s=setences, w=words)
             min_contexts
             min_citing_docs
-            sample_size (number of cited documents)
+            with_placeholder
+            sample_size
 
         If no db_uri is given, a SQLite file refs.db is expected in in_dir.
     """
@@ -184,39 +244,38 @@ def generate(in_dir, db_uri, context_margin_unit, context_margin_pre,
     limit_insert = ''
     if sample_size > 0:
         print('limiting to a sample of {} cited docs'.format(sample_size))
-        limit_insert = ' limit :lim' # order by random()
-    q = ('select uuid, cited_mag_id, cited_arxiv_id, citing_mag_id, citing_arxiv_id'
-         ' from bibitem'
-         ' where cited_mag_id in '
-         '(select cited_mag_id from bibitem group by cited_mag_id '
+        limit_insert = ' order by random() limit :lim'
+    q = ('select bibitem.uuid, mag_id, in_doc'
+         ' from bibitemmagidmap join bibitem'
+         ' on bibitemmagidmap.uuid = bibitem.uuid'
+         ' where mag_id in '
+         '(select mag_id from bibitemmagidmap group by mag_id '
            'having count(uuid) > {}{})'
-         ' order by cited_mag_id').format(min_citing_docs-1, limit_insert);
+         ' order by mag_id').format(min_citing_docs-1, limit_insert);
     if sample_size > 0:
         tuples = engine.execute(q, sample_size).fetchall()
     else:
         tuples = engine.execute(q).fetchall()
-    print('building uuid->cited_mag_id in memory map')
-    uuid_ctd_mid_map = {}
-    for uuid, ctd_mid, ctd_aid, ctg_mid, ctg_aid in tuples:
-        uuid_ctd_mid_map[uuid] = [ctd_mid, ctd_aid]
+    print('building uuid->mag_id in memory map')
+    uuid_mid_map = {}
+    for uuid, mag_id, in_doc in tuples:
+        uuid_mid_map[uuid] = mag_id
     print('going through {} citing docs'.format(len(tuples)))
     contexts = []
     tuple_idx = 0
-    ctd_mag_id = tuples[0][1]
-    bag_mag_id = ctd_mag_id
+    mag_id = tuples[0][1]
+    bag_mag_id = mag_id
     num_used_cited_docs = 0
     nums_contexts = []
     while tuple_idx < len(tuples):
         tmp_list = []
         num_docs = 0
-        while ctd_mag_id == bag_mag_id and tuple_idx < len(tuples):
+        while mag_id == bag_mag_id and tuple_idx < len(tuples):
             if tuple_idx % 1000 == 0:
                 print('{}/{}'.format(tuple_idx, len(tuples)))
             uuid = tuples[tuple_idx][0]
-            ctd_aid = tuples[tuple_idx][2]
-            ctg_mid = tuples[tuple_idx][3]
-            ctg_aid = tuples[tuple_idx][4]
-            fn_txt = '{}.txt'.format(ctg_aid)
+            in_doc = tuples[tuple_idx][2]
+            fn_txt = '{}.txt'.format(in_doc)
             path_txt = os.path.join(in_dir, fn_txt)
             if not os.path.isfile(path_txt):
                 # this is the case when a LaTeX source's \bibitems could be
@@ -234,46 +293,47 @@ def generate(in_dir, db_uri, context_margin_unit, context_margin_pre,
                 edx = m.end()
                 pre = text[:idx]
                 post = text[edx:]
-                adj_pre = find_adjacent_citations(pre, uuid_ctd_mid_map,
+                adj_pre = find_adjacent_citations(pre, uuid_mid_map,
                                                   backwards=True)
-                adj_post = find_adjacent_citations(post, uuid_ctd_mid_map)
+                adj_post = find_adjacent_citations(post, uuid_mid_map)
                 # NOTE: in case of a (small) sample, adjacent citations will
                 #       almost always be empty. that's not a bug.
                 adjacent_citations = adj_pre + adj_post
 
-                if context_margin_unit == 's':
-                    org_context = context_sentences(
-                        pre, post, context_margin_pre, context_margin_post
+                if context_size_unit == 's':
+                    win_pre, win_post = window_distance_sentences(
+                        pre, post, context_size
                         )
-                elif context_margin_unit == 'w':
-                    win_pre = clean_window_distance_words(pre, context_margin_pre,
-                                                          backwards=True)
-                    win_post = clean_window_distance_words(post, context_margin_post)
-                    pre = pre[-win_pre:]
-                    post = post[:win_post]
-                    org_context = '{} MAINCIT {}'.format(pre, post)
+                elif context_size_unit == 'w':
+                    win_pre = clean_window_distance_words(pre, 50)
+                    win_post = clean_window_distance_words(post, 50,
+                                                           backwards=False)
                 else:
                     print('invalid context size unit')
                     return False
 
-                context = re.sub(r'[\r\n]', ' ', org_context)
+                pre = pre[-win_pre:]
+                post = post[:win_post]
+
+                placeholder = ''
+                if with_placeholder:
+                    placeholder = ' MAINCIT '
+                context = '{}{}{}'.format(pre, placeholder, post)
+
+                org_context = context
+                org_context = re.sub(r'[\r\n]', ' ', org_context)
                 context = re.sub(CITE_PATT, ' CIT ', context)
                 context = re.sub(r'[\r\n]+', ' ', context)
                 context = re.sub(RE_WHITESPACE, ' ', context)
 
-                adjacent_citations_mids = [str(t[0]) for t in adjacent_citations]
-                adjacent_citations_aids = [str(t[1]) for t in adjacent_citations]
-                adj_mid_str = '{}'.format('\u241F'.join(adjacent_citations_mids))
-                adj_aid_str = '{}'.format('\u241F'.join(adjacent_citations_aids))
-                vals = [ctd_mag_id, adj_mid_str, ctg_mid, ctd_aid, adj_aid_str, ctg_aid, context]
-                vals = [str(v) for v in vals]
-                tmp_list.append(vals)
+                adj_cit_str = '{}'.format('\u241F'.join(adjacent_citations))
+                tmp_list.append([mag_id, adj_cit_str, in_doc, context])
                 marker_found = True
             if marker_found:
                 num_docs += 1
             tuple_idx += 1
             if tuple_idx < len(tuples):
-                ctd_mag_id = tuples[tuple_idx][1]
+                mag_id = tuples[tuple_idx][1]
 
         if tuple_idx < len(tuples):
             bag_mag_id = tuples[tuple_idx][1]
@@ -285,83 +345,21 @@ def generate(in_dir, db_uri, context_margin_unit, context_margin_pre,
     print('number of contexts (Σ: {}): {}'.format(
         sum(nums_contexts), nums_contexts)
         )
-    print('writing contexts to file {}'.format(output_file))
-    with open(output_file, 'w') as f:
+    with open('items.csv', 'w') as f:
         for vals in contexts:
             line = '{}\n'.format('\u241E'.join(vals))
             f.write(line)
 
-
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description=('Script for extracting '
-        'citation contexts from the unarXive data set.'))
-    parser.add_argument(
-        'in_dir',
-        help='path of the directory in which the plain text files are stored')
-    parser.add_argument(
-        '-b',
-        '--db_uri',
-        dest='db_uri',
-        default=None,
-        help='database URI (defaults to sqlite:///<in_dir>/refs.db)')
-    parser.add_argument(
-        '-f',
-        '--output_file',
-        dest='output_file',
-        default='items.csv',
-        help='name of output file (defaults to items.csv)')
-    parser.add_argument(
-        '-u',
-        '--context_margin_unit',
-        dest='margin_unit',
-        choices=('s', 'w'),
-        default='s',
-        help=('context margin unit (possible values: \'s\'=sentences, '
-              '\'w\'=words; defaults to \'s\')'))
-    parser.add_argument(
-        '-e',
-        '--context_margin_pre',
-        dest='margin_pre',
-        type=int,
-        default=1,
-        help=('number of <context_margin_unit> before the citing sentence '
-              '(defaults to 1)'))
-    parser.add_argument(
-        '-o',
-        '--context_margin_post',
-        dest='margin_post',
-        type=int,
-        default=1,
-        help=('number of <context_margin_unit> after the citing sentence '
-              '(defaults to 1)'))
-    parser.add_argument(
-        '-c',
-        '--min_contexts',
-        dest='min_contexts',
-        type=int,
-        default=1,
-        help=('require <min_context> contexts per cited document (defaults to '
-              '1)'))
-    parser.add_argument(
-        '-d',
-        '--min_citing_docs',
-        dest='min_citing_docs',
-        type=int,
-        default=1,
-        help=('require <min_citing_docs> citing documents for a cited '
-              'document (defaults to 1)'))
-    parser.add_argument(
-        '-s',
-        '--sample_size',
-        dest='sample_size',
-        type=int,
-        default=-1,
-        help=('only use a sample of <sample_size> cited documents (all are '
-              'used if argument is not given)'))
-
-    args = parser.parse_args()
-    ret = generate(args.in_dir, args.db_uri, args.margin_unit, args.margin_pre,
-                   args.margin_post, args.min_contexts, args.min_citing_docs,
-                   args.sample_size, args.output_file)
+    if len(sys.argv) not in [2, 3]:
+        print(('usage: python3 extract_contexts.py </path/to/in/dir> [<db_uri>'
+               ']'))
+        sys.exit()
+    in_dir = sys.argv[1]
+    if len(sys.argv) == 3:
+        db_uri = sys.argv[2]
+        ret = generate(in_dir, db_uri=db_uri)
+    else:
+        ret = generate(in_dir)
     if not ret:
         sys.exit()

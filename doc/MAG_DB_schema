@@ -61,3 +61,14 @@ MAG=> \d paperauthoraffiliations
 Indexes:
     "idx_paperauthoraffiliationsbyauthor" btree (authorid)
     "idx_paperauthoraffiliationsbypaper" btree (paperid)
+
+MAG19=> \d paperurls
+               Table "public.paperurls"
+   Column   |  Type   | Collation | Nullable | Default 
+------------+---------+-----------+----------+---------
+ paperid    | bigint  |           |          | 
+ sourcetype | integer |           |          | 
+ sourceurl  | text    |           | not null | 
+Indexes:
+    "paperurls_pkey" PRIMARY KEY, btree (sourceurl)
+    "idx_paperurls" btree (paperid)

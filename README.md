@@ -26,19 +26,35 @@ Code for generating a data set for citation based tasks using arXiv.org submissi
 ### Usage
 1. Extract plain texts and reference items with: `prepare.py` (or `normalize_arxiv_dump.py` + `prase_latex_tralics.py`)
 2. Match reference items with: `match_bibitems_mag.py`
-3. (optional) Clean txt output with: `clean_txt_output.py`
-4. (optional) Adjust parameters in `extract_contexts.py` at `def generate(...)`
-5. (optional) Extract citation contexts with: `extract_contexts.py`
+3. Clean txt output with: `clean_txt_output.py`
+4. Extend ID mappings
+    * Create mapping file with: `mag_id_2_arxiv_url_extend_arxiv_id.py` (see note in docstring)
+    * Run `$ jupyter notebook` and follow instructions in `unarXive_DB_ID_extend.ipynb`
+5. Extract citation contexts with: `extract_contexts.py` (see `$ extract_contexts.py -h` for usage details)
 
 ##### Example
-* `$ source venv/bin/activate`
-* `$ python3 prepare.py /tmp/arxiv-sources /tmp/arxiv-txt`
-* `$ python3 match_bibitems_mag.py path /tmp/arxiv-txt 10`
-* `$ python3 clean_txt_output.py /tmp/arxiv-txt`
-* `$ python3 extract_contexts.py /tmp/arxiv-txt`
+```
+$ source venv/bin/activate
+$ python3 prepare.py /tmp/arxiv-sources /tmp/arxiv-txt
+$ python3 match_bibitems_mag.py path /tmp/arxiv-txt 10
+$ python3 clean_txt_output.py /tmp/arxiv-txt
+$ psql MAG
+MAG=> \copy (select * from paperurls where sourceurl like '%arxiv.org%') to 'mag_id_2_arxiv_url.csv' with csv
+$ mag_id_2_arxiv_url_extend_arxiv_id.py
+$ jupyter notebook
+(go through steps in notebook)
+$ python3 extract_contexts.py /tmp/arxiv-txt \
+    --output_file context_sample.csv \
+    --sample_size 100 \
+    --context_margin_unit s \
+    --context_margin_pre 2 \
+    --context_margin_pre 0
+```
 
-### Matching evaluation
-For a manual evaluation of the reference resolution (`match_bibitems_mag.py`) we performed on a sample of 300 matchings, see `doc/matching_evaluation/`.
+
+### Evaluation of citation quality and coverage
+* For a manual evaluation of the reference resolution (`match_bibitems_mag.py`) we performed on a sample of 300 matchings, see `doc/matching_evaluation/`.
+* For a manual evaluation of citation coverage (compared to the MAG) we performed on a sample of 300 citations, see `doc/coverage_evaluation/`.
 
 ### Cite as
 
