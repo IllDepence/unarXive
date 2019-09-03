@@ -7,4 +7,3 @@ unidecode==1.0.23
 psycopg2-binary==2.7.6.1
 multiprocess==0.70.6.1
 nltk==3.4.5
-jupyter==19.1.0

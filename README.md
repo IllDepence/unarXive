@@ -29,7 +29,7 @@ Code for generating a data set for citation based tasks using arXiv.org submissi
 3. Clean txt output with: `clean_txt_output.py`
 4. Extend ID mappings
     * Create mapping file with: `mag_id_2_arxiv_url_extend_arxiv_id.py` (see note in docstring)
-    * Run `$ jupyter notebook` and follow instructions in `unarXive_DB_ID_extend.ipynb`
+    * Extend IDs with `id_extend.py`
 5. Extract citation contexts with: `extract_contexts.py` (see `$ extract_contexts.py -h` for usage details)
 
 ##### Example
@@ -41,8 +41,7 @@ $ python3 clean_txt_output.py /tmp/arxiv-txt
 $ psql MAG
 MAG=> \copy (select * from paperurls where sourceurl like '%arxiv.org%') to 'mag_id_2_arxiv_url.csv' with csv
 $ mag_id_2_arxiv_url_extend_arxiv_id.py
-$ jupyter notebook
-(go through steps in notebook)
+$ python3 id_extend.py
 $ python3 extract_contexts.py /tmp/arxiv-txt \
     --output_file context_sample.csv \
     --sample_size 100 \
