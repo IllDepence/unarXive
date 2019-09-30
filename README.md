@@ -1,6 +1,6 @@
 # unarXive
 
-Code for generating a data set for citation based tasks using arXiv.org submissions. ([data set on Zenodo](https://doi.org/10.5281/zenodo.2609187))
+Code for generating a data set for citation based tasks using arXiv.org submissions. ([data set on Zenodo](https://doi.org/10.5281/zenodo.3385851))
 
 ### Prerequisites
 * software
@@ -40,8 +40,8 @@ $ python3 match_bibitems_mag.py path /tmp/arxiv-txt 10
 $ python3 clean_txt_output.py /tmp/arxiv-txt
 $ psql MAG
 MAG=> \copy (select * from paperurls where sourceurl like '%arxiv.org%') to 'mag_id_2_arxiv_url.csv' with csv
-$ mag_id_2_arxiv_url_extend_arxiv_id.py
-$ python3 id_extend.py
+$ python3 mag_id_2_arxiv_url_extend_arxiv_id.py
+$ python3 id_extend.py /tmp/arxiv-txt/refs.db
 $ python3 extract_contexts.py /tmp/arxiv-txt \
     --output_file context_sample.csv \
     --sample_size 100 \
