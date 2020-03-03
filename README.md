@@ -1,6 +1,8 @@
 # unarXive
 
-Code for generating a data set for citation based tasks using arXiv.org submissions. ([data set on Zenodo](https://doi.org/10.5281/zenodo.3385851))
+Code for generating a data set for citation based tasks using arXiv.org submissions.
+* [Data Set on Zenodo](https://doi.org/10.5281/zenodo.3385851)
+* [Article in *Scientometrics*](http://link.springer.com/article/10.1007/s11192-020-03382-z)
 
 ### Data Sample
 You can find a small sample of the data set in [doc/unarXive_sample.tar.bz2](https://github.com/IllDepence/unarXive/blob/master/doc/unarXive_sample.tar.bz2). (Generation procedure of the sample is documented in `unarXive_sample/paper_centered_sample/README` within the archive. Furthermore, the code used for sampling is provided.)
@@ -59,21 +61,14 @@ $ python3 extract_contexts.py /tmp/arxiv-txt \
 * For a manual evaluation of citation coverage (compared to the MAG) we performed on a sample of 300 citations, see `doc/coverage_evaluation/`.
 
 ### Cite as
-
 ```
-@inproceedings{Saier2019BIR,
+@article{Saier2020,
   author        = {Tarek Saier and
                    Michael F{\"{a}}rber},
-  title         = {{Bibliometric-Enhanced arXiv: A Data Set for Paper-Based and
-                   Citation-Based Tasks}},
-  booktitle     = {Proceedings of the 8th International Workshop on
-                   Bibliometric-enhanced Information Retrieval (BIR) co-located
-                   with the 41st European Conference on Information Retrieval
-                   (ECIR 2019)},
-  pages         = {14--26},
-  year          = {2019},
-  month         = apr,
-  location      = {Cologne, Germany},
-  url           = {http://ceur-ws.org/Vol-2345/paper2.pdf}
+  title         = {unarXive: A Large Scholarly Data Set with Publications’ Full-Text, Annotated In-Text Citations, and Links to Metadata},
+  journal       = {Scientometrics},
+  year          = {2020},
+  month         = mar,
+  doi           = {10.1007/s11192-020-03382-z}
 }
 ```
