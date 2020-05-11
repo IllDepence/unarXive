@@ -9,6 +9,8 @@ Code for generating a data set for citation based tasks using arXiv.org submissi
 ### Data Sample
 You can find a small sample of the data set in [doc/unarXive_sample.tar.bz2](https://github.com/IllDepence/unarXive/blob/master/doc/unarXive_sample.tar.bz2). (Generation procedure of the sample is documented in `unarXive_sample/paper_centered_sample/README` within the archive. Furthermore, the code used for sampling is provided.)
 
+# (re)creating unarXive
+
 ### Prerequisites
 * software
     * Tralics (Ubuntu: `# apt install tralics`)
