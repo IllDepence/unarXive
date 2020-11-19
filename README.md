@@ -2,7 +2,7 @@
 
 Code for generating a data set for citation based tasks using arXiv.org submissions.
 * [Article in *Scientometrics*](http://link.springer.com/article/10.1007/s11192-020-03382-z)
-* [Data Set on Zenodo](https://doi.org/10.5281/zenodo.3385851)
+* [Data Set on Zenodo](https://doi.org/10.5281/zenodo.2553522)
 
 ![](https://github.com/IllDepence/unarXive/raw/master/doc/structure.png)
 
