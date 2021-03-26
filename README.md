@@ -66,13 +66,16 @@ $ python3 extract_contexts.py /tmp/arxiv-txt \
 
 ### Cite as
 ```
-@article{Saier2020,
-  author        = {Tarek Saier and
-                   Michael F{\"{a}}rber},
-  title         = {unarXive: A Large Scholarly Data Set with Publications’ Full-Text, Annotated In-Text Citations, and Links to Metadata},
+@article{Saier2020unarXive,
+  author        = {Saier, Tarek and F{\"{a}}rber, Michael},
+  title         = {{unarXive: A Large Scholarly Data Set with Publications’ Full-Text, Annotated In-Text Citations, and Links to Metadata}},
   journal       = {Scientometrics},
   year          = {2020},
-  month         = mar,
+  volume        = {125},
+  number        = {3},
+  pages         = {3085--3108},
+  month         = dec,
+  issn          = {1588-2861},
   doi           = {10.1007/s11192-020-03382-z}
 }
 ```
