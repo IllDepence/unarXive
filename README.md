@@ -26,10 +26,11 @@ You can find a small sample of the data set in [doc/unarXive_sample.tar.bz2](htt
 
 ##### Citation contexts
 
-Loading the pre-exported citation contexts into a data frame.
+Load the pre-exported citation contexts into a pandas data frame.
 
 ```
 import csv
+import sys
 import pandas as pd
 
 # read in unarXive citation contexts
@@ -56,13 +57,13 @@ df_contexts
 
 ##### References database
 
-Get the computer science papers most cited by other arXiv papers.
+Get the citation counts of the most cited computer science papers.
 
 ```
 $ sqlite3 refs.db
 sqlite> select
             bibitem.cited_arxiv_id,
-            count(distinct bibitem.citing_arxiv_id)
+            count(distinct bibitem.citing_mag_id)
         from
             bibitem
         join
@@ -74,7 +75,7 @@ sqlite> select
         group by
             bibitem.cited_arxiv_id
         order by
-            count(distinct bibitem.citing_arxiv_id)
+            count(distinct bibitem.citing_mag_id)
         desc;
 ```
 
