@@ -25,10 +25,10 @@
 import re
 import sys
 
-patt_ps_cache_new_id = re.compile('arxiv.org\/PS_cache\/arxiv\/pdf\/(.+?)(v\d+)?\.pdf')
-patt_ps_cache_old_id = re.compile('arxiv.org\/PS_cache\/([a-z-]+)\/pdf\/(.+?)(v\d+)?\.pdf')
-patt_ext = re.compile('arxiv.org\/[a-z]+\/(.+)((.pdf)|(\?.*$)|(v\d+))')
-patt_norm = re.compile('arxiv.org\/[a-z]+\/(.+)$')
+patt_ps_cache_new_id = re.compile('arxiv.org\/PS_cache\/arxiv\/pdf\/(.+?)(v\d+)?\.pdf', re.I)
+patt_ps_cache_old_id = re.compile('arxiv.org\/PS_cache\/([a-z-]+)\/pdf\/(.+?)(v\d+)?\.pdf', re.I)
+patt_ext = re.compile('arxiv.org\/[a-z]+\/(.+)((.pdf)|(\?.*$)|(v\d+))', re.I)
+patt_norm = re.compile('arxiv.org\/[a-z]+\/(.+)$', re.I)
 
 with open('mag_id_2_arxiv_url.csv') as fi:
     with open('mag_id_2_arxiv_id.csv', 'w') as fo:
@@ -54,6 +54,27 @@ with open('mag_id_2_arxiv_url.csv') as fi:
                 continue
             if 'r.p.stevenson/papers/arxiv.org_pdf_1503.03996v1' in line:
                 # https://staff.fnwi.uva.nl/r.p.stevenson/papers/arxiv.org_pdf_1503.03996v1.pdf
+                continue
+            if '~wmg/arxiv.org_pdf_1204.5308v2.pdf' in line:
+                # http://www.math.umd.edu/~wmg/arxiv.org_pdf_1204.5308v2.pdf
+                continue
+            if '~wmg//arxiv.org_pdf_1204.5308v2.pdf' in line:
+                # http://www2.math.umd.edu/~wmg//arxiv.org_pdf_1204.5308v2.pdf
+                continue
+            if 'ecommons.cornell.edu/bitstream/1813/3478/1/ArXiv.org.ppt' in line:
+                # http://ecommons.cornell.edu/bitstream/1813/3478/1/ArXiv.org.ppt
+                continue
+            if 'eprints.usq.edu.au/24507/1/bcool-iaus302-arxiv.org-1310.6507v1.pdf' in line:
+                # http://eprints.usq.edu.au/24507/1/bcool-iaus302-arxiv.org-1310.6507v1.pdf
+                continue
+            if 'eartharxiv.org/' in line:
+                # http://eartharxiv.org/e4gt7/
+                # https://eartharxiv.org/8a93m/
+                continue
+            if 'marxiv.org/' in line:
+                # https://marxiv.org/dx2hy/
+                continue
+            if '2766616821,0,arxiv.org' in line:
                 continue
             m = patt_ext.search(line.strip())
             if not m:
