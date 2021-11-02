@@ -1,15 +1,91 @@
 # unarXive
 
-Code for generating a data set for citation based tasks using arXiv.org submissions.
+This repository contains
+* [Helpful information for using the unarXive data set](#usage)
+* [Instructions on how to (re)create the data set](#recreating-unarxive)
+* [Citation information](cita-as)
+
+Further links
 * [Article in *Scientometrics*](http://link.springer.com/article/10.1007/s11192-020-03382-z)
 * [Data Set on Zenodo](https://doi.org/10.5281/zenodo.2553522)
+
+## Usage
+
+The unarXive data set contains
+* full text papers in plain text (`papers/`)
+* a database with bibliographic interlinkings (`papers/refs.db`)
+* pre-extracted citation-contexts (`contexts/extracted_contexts.csv`) (see [README_contexts.md](README_contexts.md))
+* and a script for extracting citation-contexts (`code/extract_contexts.py`)
 
 ![](https://github.com/IllDepence/unarXive/raw/master/doc/structure.png)
 
 ### Data Sample
 You can find a small sample of the data set in [doc/unarXive_sample.tar.bz2](https://github.com/IllDepence/unarXive/blob/master/doc/unarXive_sample.tar.bz2). (Generation procedure of the sample is documented in `unarXive_sample/paper_centered_sample/README` within the archive. Furthermore, the code used for sampling is provided.)
 
-# (re)creating unarXive
+### Usage examples
+
+##### Citation contexts
+
+Loading the pre-exported citation contexts into a data frame.
+
+```
+import csv
+import pandas as pd
+
+# read in unarXive citation contexts
+csv.field_size_limit(sys.maxsize)
+df_contexts = pd.read_csv(
+    'contexts/extracted_contexts.csv',
+    names = [
+        'cited_mag_id',
+        'adjacent_citations_mag_ids',
+        'citig_mid',
+        'cited_arxiv_id',
+        'adjacent_citations_arxiv_ids',
+        'citig_arxiv_id',
+        'citation_context'
+        ],
+    sep = '\u241E',
+    engine = 'python',
+    quoting = csv.QUOTE_NONE
+)
+# adjacent_*_ids values are seperated by \u241F
+
+df_contexts
+```
+
+##### References database
+
+Get the computer science papers most cited by other arXiv papers.
+
+```
+$ sqlite3 refs.db
+sqlite> select
+            bibitem.cited_arxiv_id,
+            count(distinct bibitem.citing_arxiv_id)
+        from
+            bibitem
+        join
+            arxivmetadata
+        on
+            bibitem.cited_arxiv_id = arxivmetadata.arxiv_id
+        where
+            arxivmetadata.discipline = 'cs'
+        group by
+            bibitem.cited_arxiv_id
+        order by
+            count(distinct bibitem.citing_arxiv_id)
+        desc;
+```
+
+##### Paper full texts
+
+Extract citation contexts including identifiers of the citing and cited document.
+
+See `code/extract_contexts.py` in the data set.
+
+## (re)creating unarXive
+Generating a data set for citation based tasks using arxiv.org submissions.
 
 ### Prerequisites
 * software
@@ -64,7 +140,7 @@ $ python3 extract_contexts.py /tmp/arxiv-txt \
 * For a manual evaluation of the reference resolution (`match_bibitems_mag.py`) we performed on a sample of 300 matchings, see `doc/matching_evaluation/`.
 * For a manual evaluation of citation coverage (compared to the MAG) we performed on a sample of 300 citations, see `doc/coverage_evaluation/`.
 
-### Cite as
+## Cite as
 ```
 @article{Saier2020unarXive,
   author        = {Saier, Tarek and F{\"{a}}rber, Michael},
