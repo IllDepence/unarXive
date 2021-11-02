@@ -17,6 +17,8 @@ The unarXive data set contains
 * pre-extracted citation-contexts (`contexts/extracted_contexts.csv`) (see [README_contexts.md](README_contexts.md))
 * and a script for extracting citation-contexts (`code/extract_contexts.py`)
 
+‌  
+
 ![](https://github.com/IllDepence/unarXive/raw/master/doc/structure.png)
 
 ### Data Sample

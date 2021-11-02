@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use the unarXive data set, please cite it as below."
+authors:
+  - family-names: Saier
+    given-names: Tarek
+    orcid: https://orcid.org/0000-0001-5028-0109
+  - family-names: Färber
+    given-names: Michael
+    orcid: https://orcid.org/0000-0001-5458-8645
+title: "unarXive: a large scholarly data set with publications’ full-text, annotated in-text citations, and links to metadata"
+doi: 10.1007/s11192-020-03382-z
