@@ -16,3 +16,7 @@
 1. replace SQLite output with one CSV file per database table
 2. replace JSONL output with CSV (write these CSVs into the output directory, not the CWD)
 3. any code cleanup on the way is appreciated ;)
+
+### Troubleshooting
+If the creation of the virtual enviroment fails try [this](https://stackoverflow.com/questions/5178416/libxml-install-error-using-pip)
+or [this](https://stackoverflow.com/questions/22938679/error-trying-to-install-postgres-for-python-psycopg2)
