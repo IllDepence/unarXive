@@ -100,13 +100,17 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
     num_citations = 0
     num_citations_notfound = 0
 
-    # Setup lists to put in csv
+    # Setup lists to put in csv instead of json
     lines_figures = []
     lines_formulas = []
     lines_tables = []
+    # Setup list to put in csv instead of db
+    lines_bibitem = []
+    lines_bibitemarxividmap = []
+    lines_bibitemlinkmap = []
 
     # Iterate over each file in input directory
-    for i, fn in enumerate(os.listdir(IN_DIR)):
+    for fn in os.listdir(IN_DIR):
         path = os.path.join(IN_DIR, fn)  # absolute path to current file
         aid, ext = os.path.splitext(fn)  # get file extension
         out_txt_path = os.path.join(OUT_DIR, '{}.txt'.format(aid))  # make txt file for each file
@@ -373,7 +377,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 text = re.sub('\s+', ' ', text).strip()
                 # replace the uuid of formulas in reference string
                 text = re.sub(r'(^{{formula:)(.*)', '', text)
-                sha_hash = str(uuid.uuid4())
+                sha_hash = str(uuid.uuid4())  # That does nothing
                 sha_hash = sha1()
                 items = [text.encode('utf-8'), str(aid).encode('utf-8')]
                 for item in items:
@@ -381,6 +385,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 sha_hash_string = str(sha_hash.hexdigest())
                 local_key = bi.get('id')
 
+                # Contents of bibitem table
                 try:
                     bibkey_map[local_key] = sha_hash_string
                     bibitem_db = Bibitem(
@@ -388,9 +393,15 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                         in_doc=aid,
                         bibitem_string=text
                     )
+                    line_csv = [
+                        sha_hash_string,
+                        aid,
+                        text
+                    ]
+                    lines_bibitem.append(line_csv)
                     session.add(bibitem_db)
                     session.flush()
-                except:
+                except:  # idk what this does
                     update_hash_one(
                         sha_hash=sha_hash, count=0, local_key=local_key,
                         session=session, bibkey_map=bibkey_map, aid=aid,
@@ -399,23 +410,46 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
 
                 # nach arxiv Kategorie Filtern können
                 # --> wissenschaftliche Disziplin mit abspeichern
-
+                # Contents of bibitemarxividmap and bibitemlink db
                 for xref in containing_p.findall('xref'):
                     link = xref.get('url')
                     match = ARXIV_URL_PATT.search(link)
+                    # Part of ugly solution, see below
+                    line_arxiv = []
+                    line_link = []
                     if match:
                         id_part = match.group(1)
                         map_db = BibitemArxivIDMap(
                             uuid=sha_hash_string,
                             arxiv_id=id_part
                         )
+                        line_arxiv = [
+                            sha_hash_string,
+                            id_part
+                        ]
                     else:
                         map_db = BibitemLinkMap(
                             uuid=sha_hash_string,
                             link=link
                         )
+                        line_link = [
+                            sha_hash_string,
+                            link
+                        ]
+
                     session.add(map_db)
                     session.flush()
+
+                    # ugly solution but no other way to get the primary key of the other dbs
+                    local_id = map_db.id
+                    if len(line_arxiv) > 0:
+                        line_arxiv.insert(0, local_id)
+                        lines_bibitemarxividmap.append(line_arxiv)
+                    else:
+                        line_link.insert(0, local_id)
+                        lines_bibitemlinkmap.append(line_link)
+
+
 
                 # make refs db a json (how to check unique constraint?)
                 """
@@ -465,6 +499,11 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             with open(out_txt_path, 'w') as f:
                 f.write(tree_str)
             session.commit()
+        # Write db file contents in csv
+        write_to_csv(OUT_DIR, 'bibitem_csv', ['uuid', 'in_doc', 'bibitem_string'], lines_bibitem)
+        write_to_csv(OUT_DIR, 'bibitemarividmap_csv', ['id', 'uuid', 'arxiv_id'], lines_bibitemarxividmap)
+        write_to_csv(OUT_DIR, 'bibitemlinkmap_csv', ['id', 'uuid', 'link'], lines_bibitemlinkmap)
+
     log(('Citations: {} (not unique)\nUnmatched citations: {}'
          '').format(num_citations, num_citations_notfound))
     return True
