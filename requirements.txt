@@ -1,5 +1,5 @@
 chardet==3.0.4
-lxml==4.2.5
+lxml==4.9.1
 python-magic==0.4.15
 requests==2.20.0
 sqlalchemy==1.3.0
