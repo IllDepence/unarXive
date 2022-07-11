@@ -165,23 +165,23 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     # print('FAILED {}. skipping'.format(aid))
                     log('\n--- {} ---\n{}\n----------\n'.format(aid, e))
                     continue
-            # tags things that could be treated specially
-            # - <Metadata>
-            #     - <title>
-            #     - <authors><author>
-            # - <head>
-            # - <proof>
-            # - <abstract>
-            # - <maketitle>
-            # - <list> (might be used for larger chunks of text like
-            #           related work)
-            #
-            # tags *NOT* to touch
-            # - <unknown>: can surround whole content
+                # tags things that could be treated specially
+                # - <Metadata>
+                #     - <title>
+                #     - <authors><author>
+                # - <head>
+                # - <proof>
+                # - <abstract>
+                # - <maketitle>
+                # - <list> (might be used for larger chunks of text like
+                #           related work)
+                #
+                # tags *NOT* to touch
+                # - <unknown>: can surround whole content
 
-            # Combined with csv output
-            with jsonlines.open('figure_json.jsonl',
-                                mode='a') as writer:  # Put all figures with ids and captions in json file
+                # Combined with csv output
+                # with jsonlines.open('figure_json.jsonl',
+                # mode='a') as writer:  # Put all figures with ids and captions in json file
                 for stag in tree.xpath('//{}'.format('figure')):
                     figure_uuid = uuid.uuid4()  # Create uuid for each figure
                     caption_text = ''
@@ -205,7 +205,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                         ]
                         lines_figures.append(line_csv)
                         line = json.dumps(line)
-                        writer.write(line)
+                        # writer.write(line)
                     else:
                         stag.tail = '{{{{figure:{}}}}}'.format(figure_uuid)
                         # generate json line
@@ -220,105 +220,105 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                         ]
                         lines_figures.append(line_csv)
                         line = json.dumps(line)
-                        writer.write(line)
+                        # writer.write(line)
             # Add all generated csv lines to file
             write_to_csv(OUT_DIR, 'figure_csv', ['id', 'caption'], lines_figures)
             etree.strip_elements(tree, 'figure', with_tail=False)  # Delete all figure tags from xml file
 
             # Combined with csv output
-            with jsonlines.open('table_json.jsonl', mode='a') as writer:
-                for stag in tree.xpath('//{}'.format('table')):
-                    # uuid
-                    table_uuid = uuid.uuid4()
-                    caption_text = ''
-                    for element in stag.iter():
-                        if element.tag == 'caption':
-                            if element.text is not None:
-                                caption_text += element.text + ' '
-                    if len(caption_text) >= 1:
-                        stag.tail = '{{{{table:{}}}}} {}'.format(
-                            1, caption_text
-                        )
-                        # generate json line
-                        line = {
-                            'id': str(table_uuid),
-                            'caption': caption_text
-                        }
-                        # Generate csv line
-                        line_csv = [
-                            str(table_uuid),
-                            caption_text
-                        ]
-                        lines_tables.append(line_csv)
-                        line = json.dumps(line)
-                        writer.write(line)
-                    else:
-                        stag.tail = '{{{{table:{}}}}}'.format(figure_uuid)
-                        # generate json line
-                        line = {
-                            'id': str(table_uuid),
-                            'caption': 'no-caption'
-                        }
-                        # Generate csv line
-                        line_csv = [
-                            str(table_uuid),
-                            'no-caption'
-                        ]
-                        lines_tables.append(line_csv)
-                        line = json.dumps(line)
-                        writer.write(line)
+            # with jsonlines.open('table_json.jsonl', mode='a') as writer:
+            for stag in tree.xpath('//{}'.format('table')):
+                # uuid
+                table_uuid = uuid.uuid4()
+                caption_text = ''
+                for element in stag.iter():
+                    if element.tag == 'caption':
+                        if element.text is not None:
+                            caption_text += element.text + ' '
+                if len(caption_text) >= 1:
+                    stag.tail = '{{{{table:{}}}}} {}'.format(
+                        1, caption_text
+                    )
+                    # generate json line
+                    line = {
+                        'id': str(table_uuid),
+                        'caption': caption_text
+                    }
+                    # Generate csv line
+                    line_csv = [
+                        str(table_uuid),
+                        caption_text
+                    ]
+                    lines_tables.append(line_csv)
+                    line = json.dumps(line)
+                    # writer.write(line)
+                else:
+                    stag.tail = '{{{{table:{}}}}}'.format(figure_uuid)
+                    # generate json line
+                    line = {
+                        'id': str(table_uuid),
+                        'caption': 'no-caption'
+                    }
+                    # Generate csv line
+                    line_csv = [
+                        str(table_uuid),
+                        'no-caption'
+                    ]
+                    lines_tables.append(line_csv)
+                    line = json.dumps(line)
+                    # writer.write(line)
             # Add all generated csv lines to file
             write_to_csv(OUT_DIR, 'table_csv', ['id', 'caption'], lines_tables)
 
             etree.strip_elements(tree, 'table', with_tail=False)  # Delete all table files from XML file
 
             # Combined with csv output
-            with jsonlines.open('formula_json.jsonl', mode='a') as writer:
-                for stag in tree.xpath('//{}'.format('formula')):
-                    content = stag.tail
-                    doc_name = fn
-                    try:
-                        items = [
-                            stag[1].text.encode('utf-8'),
-                            doc_name.encode('utf-8')
-                        ]
-                    except:
-                        items = ['none-type'.encode('utf-8')]
-                    # uuid
-                    formula_uuid = uuid.uuid4()
-                    if stag.tail:
-                        stag.tail = '{{{{formula:{}}}}} {}'.format(
-                            formula_uuid,
-                            content
-                        )
-                        # generate json line
-                        line = {
-                            'id': str(formula_uuid),
-                            'content': stag[1].text
-                        }
-                        # Generate csv line
-                        line_csv = [
-                            str(formula_uuid),
-                            stag[1].text
-                        ]
-                        lines_formulas.append(line_csv)
-                        line = json.dumps(line)
-                        writer.write(line)
-                    else:
-                        stag.tail = '{{{{formula:{}}}}}'.format(formula_uuid)
-                        # generate json line
-                        line = {
-                            'id': str(formula_uuid),
-                            'content': 'no-content'
-                        }
-                        # Generate csv line
-                        line_csv = [
-                            str(formula_uuid),
-                            'no-content'
-                        ]
-                        lines_formulas.append(line_csv)
-                        line = json.dumps(line)
-                        writer.write(line)
+            # with jsonlines.open('formula_json.jsonl', mode='a') as writer:
+            for stag in tree.xpath('//{}'.format('formula')):
+                content = stag.tail
+                doc_name = fn
+                try:
+                    items = [
+                        stag[1].text.encode('utf-8'),
+                        doc_name.encode('utf-8')
+                    ]
+                except:
+                    items = ['none-type'.encode('utf-8')]
+                # uuid
+                formula_uuid = uuid.uuid4()
+                if stag.tail:
+                    stag.tail = '{{{{formula:{}}}}} {}'.format(
+                        formula_uuid,
+                        content
+                    )
+                    # generate json line
+                    line = {
+                        'id': str(formula_uuid),
+                        'content': stag[1].text
+                    }
+                    # Generate csv line
+                    line_csv = [
+                        str(formula_uuid),
+                        stag[1].text
+                    ]
+                    lines_formulas.append(line_csv)
+                    line = json.dumps(line)
+                    # writer.write(line)
+                else:
+                    stag.tail = '{{{{formula:{}}}}}'.format(formula_uuid)
+                    # generate json line
+                    line = {
+                        'id': str(formula_uuid),
+                        'content': 'no-content'
+                    }
+                    # Generate csv line
+                    line_csv = [
+                        str(formula_uuid),
+                        'no-content'
+                    ]
+                    lines_formulas.append(line_csv)
+                    line = json.dumps(line)
+                    # writer.write(line)
             # Add all generated csv lines to file
             write_to_csv(OUT_DIR, 'formula_csv', ['id', 'caption'], lines_formulas)
 
@@ -448,8 +448,6 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     else:
                         line_link.insert(0, local_id)
                         lines_bibitemlinkmap.append(line_link)
-
-
 
                 # make refs db a json (how to check unique constraint?)
                 """
