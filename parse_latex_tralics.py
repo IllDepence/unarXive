@@ -88,14 +88,14 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
     if not os.path.isdir(OUT_DIR):
         os.makedirs(OUT_DIR)
     # Setup sqlite database
-    if not db_uri:
-        db_path = os.path.join(OUT_DIR, 'refs.db')
-        db_uri = 'sqlite:///{}'.format(os.path.abspath(db_path))
-    engine = create_engine(db_uri)
-    Base.metadata.create_all(engine)
-    Base.metadata.bind = engine
-    DBSession = sessionmaker(bind=engine)
-    session = DBSession()
+    # if not db_uri:
+    #     db_path = os.path.join(OUT_DIR, 'refs.db')
+    #     db_uri = 'sqlite:///{}'.format(os.path.abspath(db_path))
+    # engine = create_engine(db_uri)
+    # Base.metadata.create_all(engine)
+    # Base.metadata.bind = engine
+    # DBSession = sessionmaker(bind=engine)
+    # session = DBSession()
 
     num_citations = 0
     num_citations_notfound = 0
@@ -108,6 +108,9 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
     lines_bibitem = []
     lines_bibitemarxividmap = []
     lines_bibitemlinkmap = []
+    # Primary key replacements
+    i = 1
+    j = 1
 
     # Iterate over each file in input directory
     for fn in os.listdir(IN_DIR):
@@ -399,14 +402,15 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                         text
                     ]
                     lines_bibitem.append(line_csv)
-                    session.add(bibitem_db)
-                    session.flush()
+                    # session.add(bibitem_db)
+                    # session.flush()
                 except:  # idk what this does
-                    update_hash_one(
-                        sha_hash=sha_hash, count=0, local_key=local_key,
-                        session=session, bibkey_map=bibkey_map, aid=aid,
-                        text=text
-                    )
+                    # update_hash_one(
+                    #     sha_hash=sha_hash, count=0, local_key=local_key,
+                    #     session=session, bibkey_map=bibkey_map, aid=aid,
+                    #     text=text
+                    # )
+                    continue
 
                 # nach arxiv Kategorie Filtern können
                 # --> wissenschaftliche Disziplin mit abspeichern
@@ -437,17 +441,21 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                             link
                         ]
 
-                    session.add(map_db)
-                    session.flush()
+                    # session.add(map_db)
+                    # session.flush()
 
                     # ugly solution but no other way to get the primary key of the other dbs
                     local_id = map_db.id
                     if len(line_arxiv) > 0:
-                        line_arxiv.insert(0, local_id)
+                        # line_arxiv.insert(0, local_id)
+                        line_arxiv.insert(0, i)
                         lines_bibitemarxividmap.append(line_arxiv)
+                        i += 1
                     else:
-                        line_link.insert(0, local_id)
+                        # line_link.insert(0, local_id)
+                        line_link.insert(0, j)
                         lines_bibitemlinkmap.append(line_link)
+                        j += 1
 
                 # make refs db a json (how to check unique constraint?)
                 """
@@ -496,7 +504,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
 
             with open(out_txt_path, 'w') as f:
                 f.write(tree_str)
-            session.commit()
+            # session.commit()
         # Write db file contents in csv
         write_to_csv(OUT_DIR, 'bibitem_csv', ['uuid', 'in_doc', 'bibitem_string'], lines_bibitem)
         write_to_csv(OUT_DIR, 'bibitemarividmap_csv', ['id', 'uuid', 'arxiv_id'], lines_bibitemarxividmap)
