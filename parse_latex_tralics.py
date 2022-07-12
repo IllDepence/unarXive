@@ -2,7 +2,6 @@
 """
 
 import json
-import jsonlines
 import os
 import re
 import subprocess
@@ -10,9 +9,6 @@ import sys
 import tempfile
 import uuid
 from lxml import etree
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from db_model import Base, Bibitem, BibitemLinkMap, BibitemArxivIDMap
 from hashlib import sha1
 import csv
 
@@ -22,48 +18,6 @@ ARXIV_URL_PATT = re.compile(
      r')?[\d\.]{5,10}(v\d)?$)'),
     re.I
 )
-
-
-# if the hash is not unique, it gets updated with integers until it is unique
-# # FIXME: are these two identical funcions calling each other?!
-def update_hash_one(
-        sha_hash, count, local_key, session, bibkey_map, aid, text
-):
-    session.rollback()
-    sha_hash.update(str(count).encode('utf-8'))
-    sha_hash_string = str(sha_hash.hexdigest())
-    try:
-        bibkey_map[local_key] = sha_hash_string
-        bibitem_db = Bibitem(
-            uuid=sha_hash_string, in_doc=aid, bibitem_string=text
-        )
-        session.add(bibitem_db)
-        session.flush()
-    except:
-        update_hash_two(
-            sha_hash=sha_hash, count=0, local_key=local_key,
-            session=session, bibkey_map=bibkey_map, aid=aid, text=text
-        )
-
-
-def update_hash_two(
-        sha_hash, count, local_key, session, bibkey_map, aid, text
-):
-    session.rollback()
-    sha_hash.update(str(count).encode('utf-8'))
-    sha_hash_string = str(sha_hash.hexdigest())
-    try:
-        bibkey_map[local_key] = sha_hash_string
-        bibitem_db = Bibitem(
-            uuid=sha_hash_string, in_doc=aid, bibitem_string=text
-        )
-        session.add(bibitem_db)
-        session.flush()
-    except:
-        update_hash_one(
-            sha_hash=sha_hash, count=count + 1, local_key=local_key,
-            session=session, bibkey_map=bibkey_map, aid=aid, text=text
-        )
 
 
 def write_to_csv(output_dir, filename, header, lines):
@@ -87,15 +41,6 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
 
     if not os.path.isdir(OUT_DIR):
         os.makedirs(OUT_DIR)
-    # Setup sqlite database
-    # if not db_uri:
-    #     db_path = os.path.join(OUT_DIR, 'refs.db')
-    #     db_uri = 'sqlite:///{}'.format(os.path.abspath(db_path))
-    # engine = create_engine(db_uri)
-    # Base.metadata.create_all(engine)
-    # Base.metadata.bind = engine
-    # DBSession = sessionmaker(bind=engine)
-    # session = DBSession()
 
     num_citations = 0
     num_citations_notfound = 0
@@ -386,16 +331,9 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 for item in items:
                     sha_hash.update(item)
                 sha_hash_string = str(sha_hash.hexdigest())
-                local_key = bi.get('id')
 
                 # Contents of bibitem table
                 try:
-                    bibkey_map[local_key] = sha_hash_string
-                    bibitem_db = Bibitem(
-                        uuid=sha_hash_string,
-                        in_doc=aid,
-                        bibitem_string=text
-                    )
                     line_csv = [
                         sha_hash_string,
                         aid,
@@ -405,11 +343,6 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     # session.add(bibitem_db)
                     # session.flush()
                 except:  # idk what this does
-                    # update_hash_one(
-                    #     sha_hash=sha_hash, count=0, local_key=local_key,
-                    #     session=session, bibkey_map=bibkey_map, aid=aid,
-                    #     text=text
-                    # )
                     continue
 
                 # nach arxiv Kategorie Filtern können
@@ -423,19 +356,11 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     line_link = []
                     if match:
                         id_part = match.group(1)
-                        map_db = BibitemArxivIDMap(
-                            uuid=sha_hash_string,
-                            arxiv_id=id_part
-                        )
                         line_arxiv = [
                             sha_hash_string,
                             id_part
                         ]
                     else:
-                        map_db = BibitemLinkMap(
-                            uuid=sha_hash_string,
-                            link=link
-                        )
                         line_link = [
                             sha_hash_string,
                             link
@@ -445,7 +370,6 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     # session.flush()
 
                     # ugly solution but no other way to get the primary key of the other dbs
-                    local_id = map_db.id
                     if len(line_arxiv) > 0:
                         # line_arxiv.insert(0, local_id)
                         line_arxiv.insert(0, i)
