@@ -21,9 +21,11 @@ ARXIV_URL_PATT = re.compile(
 
 
 def write_to_csv(output_dir, filename, header, lines):
-    with open(output_dir + filename + '.csv', 'w', encoding='utf8') as f:
+    fn = f'{filename}.csv'
+    fp = os.path.join(output_dir, fn)
+    with open(fp, 'w', encoding='utf8') as f:
         # Setup CSV file
-        csv_writer = csv.writer(f)
+        csv_writer = csv.writer(f, dialect='unix')
         csv_writer.writerow(header)
         csv_writer.writerows(lines)
 
