@@ -203,7 +203,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     line = json.dumps(line)
                     # writer.write(line)
                 else:
-                    stag.tail = '{{{{table:{}}}}}'.format(figure_uuid)
+                    stag.tail = '{{{{table:{}}}}}'.format(table_uuid)
                     # generate json line
                     line = {
                         'id': str(table_uuid),
@@ -333,6 +333,8 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 for item in items:
                     sha_hash.update(item)
                 sha_hash_string = str(sha_hash.hexdigest())
+                local_key = bi.get('id')
+                bibkey_map[local_key] = sha_hash_string
 
                 # Contents of bibitem table
                 try:
