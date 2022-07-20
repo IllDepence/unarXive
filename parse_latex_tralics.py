@@ -450,6 +450,6 @@ if __name__ == '__main__':
         sys.exit()
     IN_DIR = sys.argv[1]
     OUT_DIR = sys.argv[2]
-    ret = parse(IN_DIR, OUT_DIR, INCREMENTAL=True)
+    ret = parse(IN_DIR, OUT_DIR, INCREMENTAL=False)
     if not ret:
         sys.exit()
