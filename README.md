@@ -12,10 +12,24 @@
 * run `normalize_arxiv_dump.py` on raw source files
 * run `prase_latex_tralics.py` on normalized LaTeX files
 
+### Testruns
+
+##### 2017 data
+```
+(venv) ys8950@aifb-ls3-icarus:/opt/unarXive/unarXive_update_2022/hiwi_task_220629_latexparse$ time python3 prepare.py /mnt/lsdf_clasics/data/arxiv-2022-wip/copied_src_files/ /opt/unarXive/unarXive_update_2022/unarXive_2022_wip_2017data_parsed/
+1/305
+[...]
+305/305
+123523 files
+11202 PDFs
+
+real    640m38,377s
+user    519m0,535s
+sys     74m5,791s
+```
+
 ### TODOs
-1. replace SQLite output with one CSV file per database table
-2. replace JSONL output with CSV (write these CSVs into the output directory, not the CWD)
-3. any code cleanup on the way is appreciated ;)
+* investigate low rate of table and figure captions
 
 ### Troubleshooting
 If the creation of the virtual enviroment fails try [this](https://stackoverflow.com/questions/5178416/libxml-install-error-using-pip)
