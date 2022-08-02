@@ -49,18 +49,6 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
     num_citations = 0
     num_citations_notfound = 0
 
-    # setup lists to put in csv instead of json
-    lines_figures = []
-    lines_tables = []
-    lines_formulas = []
-    # setup list to put in csv instead of db
-    lines_bibitem = []
-    lines_bibitemarxividmap = []
-    lines_bibitemlinkmap = []
-    # primary key replacements
-    i = 1
-    j = 1
-
     # iterate over each file in input directory
     for fn in os.listdir(IN_DIR):
         path = os.path.join(IN_DIR, fn)  # absolute path to current file
@@ -140,6 +128,15 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             # # - <figure/table><head>caption text ...
             # # - <figure/table><caption>caption text ...
             # # - <float type="figure/table"><caption>caption text ...
+
+            # setup lists to put in externally saved content
+            lines_figures = []
+            lines_tables = []
+            lines_formulas = []
+            lines_bibitem = []
+            lines_bibitemarxividmap = []
+            lines_bibitemlinkmap = []
+            # get xml tags
             ftags = tree.xpath('//{}'.format('figure'))
             ttags = tree.xpath('//{}'.format('table'))
             fltags = tree.xpath('//{}'.format('float'))
@@ -163,8 +160,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                             with_tail=False
                         )
                         if len(elem_text) > 0:
-                            caption_text += elem_text
-                            caption_text += ' '
+                            caption_text = elem_text
                 if len(caption_text) < 1:
                     caption_text = 'NO_CAPTION'
 
@@ -225,7 +221,9 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 line_csv = [
                     str(formula_uuid),
                     ''.join(latex_content.splitlines()),
-                    ''.join(mathml_content.splitlines())
+                    # [51:-7] removes the surrounding
+                    # <math xmlns=""[...]/MathML""> and </math>
+                    ''.join(mathml_content.splitlines())[51:-7]
                 ]
                 lines_formulas.append(line_csv)
             # add all generated csv lines to file
@@ -302,7 +300,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 local_key = bi.get('id')
                 bibkey_map[local_key] = sha_hash_string
 
-                # contents of bibitem table
+                # contents of bibitem CSV
                 line_csv = [
                     sha_hash_string,
                     aid,
@@ -310,42 +308,23 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 ]
                 lines_bibitem.append(line_csv)
 
-                # TODO: check if code below makes sense and/or
-                #       needs refactoring
-
-                # nach arxiv Kategorie Filtern können
-                # --> wissenschaftliche Disziplin mit abspeichern
                 # Contents of bibitemarxividmap and bibitemlink db
                 for xref in containing_p.findall('xref'):
                     link = xref.get('url')
                     match = ARXIV_URL_PATT.search(link)
-                    # Part of ugly solution, see below
-                    line_arxiv = []
-                    line_link = []
                     if match:
                         id_part = match.group(1)
                         line_arxiv = [
                             sha_hash_string,
                             id_part
                         ]
+                        lines_bibitemarxividmap.append(line_arxiv)
                     else:
                         line_link = [
                             sha_hash_string,
                             link
                         ]
-
-                    # ugly solution but no other way to get the primary key
-                    # of the other dbs
-                    if len(line_arxiv) > 0:
-                        # line_arxiv.insert(0, local_id)
-                        line_arxiv.insert(0, i)
-                        lines_bibitemarxividmap.append(line_arxiv)
-                        i += 1
-                    else:
-                        # line_link.insert(0, local_id)
-                        line_link.insert(0, j)
                         lines_bibitemlinkmap.append(line_link)
-                        j += 1
 
             citations = tree.xpath('//cit')
             for cit in citations:
@@ -389,13 +368,13 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
         write_to_csv(
             OUT_DIR,
             'bibitemarividmap',
-            ['id', 'uuid', 'arxiv_id'],
+            ['uuid', 'arxiv_id'],
             lines_bibitemarxividmap
         )
         write_to_csv(
             OUT_DIR,
             'bibitemlinkmap',
-            ['id', 'uuid', 'link'],
+            ['uuid', 'link'],
             lines_bibitemlinkmap
         )
 
