@@ -6,6 +6,7 @@ import shutil
 import sys
 import tarfile
 import tempfile
+import time
 from normalize_arxiv_dump import normalize
 from parse_latex_tralics import parse
 
@@ -40,15 +41,31 @@ def prepare(in_dir, out_dir, write_logs=False):
             print('done in a previous run. skipping')
             continue
         tar_path = os.path.join(in_dir, tar_fn)
-        try:
-            is_tar = tarfile.is_tarfile(tar_path)
-        except IsADirectoryError:
-            print(('unexpected directory "{}" in {}. skipping'
-                   '').format(tar_fn, in_dir))
-            continue
-        if not is_tar:
-            print(('"{}" is not a TAR archive. skipping'
-                   '').format(tar_fn))
+        # check if file can be skipped
+        skip_file = False
+        # "gracefully" handle input file access (currently a network mount)
+        num_tries = 1
+        while True:
+            # try file access
+            try:
+                # try tar
+                try:
+                    is_tar = tarfile.is_tarfile(tar_path)
+                except IsADirectoryError:
+                    print(('unexpected directory "{}" in {}. skipping'
+                           '').format(tar_fn, in_dir))
+                    skip_file = True
+                if not is_tar:
+                    print(('"{}" is not a TAR archive. skipping'
+                           '').format(tar_fn))
+                    skip_file = True
+                break  # not remote access problems
+            except IOError as err:
+                print(('[{}] IO error when trying check tar file: {}'
+                       '').format(num_tries, err))
+                num_tries += 1
+                time.sleep(60)
+        if skip_file:
             continue
         with tempfile.TemporaryDirectory() as tmp_dir_path:
             # prepare folders for intermediate results
@@ -57,8 +74,18 @@ def prepare(in_dir, out_dir, write_logs=False):
             tmp_dir_norm = os.path.join(tmp_dir_path, 'normalized')
             os.mkdir(tmp_dir_norm)
             # extraxt
-            tar = tarfile.open(tar_path)
-            tar.extractall(path=tmp_dir_gz)
+            # "gracefully" handle input file access (currently a network mount)
+            num_tries = 1
+            while True:
+                try:
+                    tar = tarfile.open(tar_path)
+                    tar.extractall(path=tmp_dir_gz)
+                    break
+                except IOError as err:
+                    print(('[{}] IO error when trying exract tar file: {}'
+                           '').format(num_tries, err))
+                    num_tries += 1
+                    time.sleep(60)
             containing_dir = os.listdir(tmp_dir_gz)[0]
             containing_path = os.path.join(tmp_dir_gz,
                                            containing_dir)
@@ -88,4 +115,4 @@ if __name__ == '__main__':
         sys.exit()
     in_dir = sys.argv[1]
     out_dir_dir = sys.argv[2]
-    ret = prepare(in_dir, out_dir_dir)
+    ret = prepare(in_dir, out_dir_dir, write_logs=True)

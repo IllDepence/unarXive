@@ -23,10 +23,12 @@ ARXIV_URL_PATT = re.compile(
 def write_to_csv(output_dir, filename, header, lines):
     fn = f'{filename}.csv'
     fp = os.path.join(output_dir, fn)
-    with open(fp, 'w', encoding='utf8') as f:
+    skip_header = os.path.isfile(fp)
+    with open(fp, 'a', encoding='utf8') as f:
         # Setup CSV file
         csv_writer = csv.writer(f, dialect='unix')
-        csv_writer.writerow(header)
+        if not skip_header:
+            csv_writer.writerow(header)
         csv_writer.writerows(lines)
 
 
@@ -47,31 +49,33 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
     num_citations = 0
     num_citations_notfound = 0
 
-    # Setup lists to put in csv instead of json
+    # setup lists to put in csv instead of json
     lines_figures = []
-    lines_formulas = []
     lines_tables = []
-    # Setup list to put in csv instead of db
+    lines_formulas = []
+    # setup list to put in csv instead of db
     lines_bibitem = []
     lines_bibitemarxividmap = []
     lines_bibitemlinkmap = []
-    # Primary key replacements
+    # primary key replacements
     i = 1
     j = 1
 
-    # Iterate over each file in input directory
+    # iterate over each file in input directory
     for fn in os.listdir(IN_DIR):
         path = os.path.join(IN_DIR, fn)  # absolute path to current file
         aid, ext = os.path.splitext(fn)  # get file extension
-        out_txt_path = os.path.join(OUT_DIR, '{}.txt'.format(aid))  # make txt file for each file
-        if INCREMENTAL and os.path.isfile(out_txt_path):  # Skip already existing files
+        # make txt file for each file
+        out_txt_path = os.path.join(OUT_DIR, '{}.txt'.format(aid))
+        # skip already existing files
+        if INCREMENTAL and os.path.isfile(out_txt_path):
             # print('{} already in output directory, skipping'.format(aid))
             continue
         # print(aid)
         if PDF_EXT_PATT.match(ext):  # Skip pdf files
             log('skipping file {} (PDF)'.format(fn))
             continue
-        # Write latex contents in a temporary xml file
+        # write latex contents in a temporary xml file
         with tempfile.TemporaryDirectory() as tmp_dir_path:
             tmp_xml_path = os.path.join(tmp_dir_path, '{}.xml'.format(aid))
             # run latexml
@@ -103,193 +107,153 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
 
             # get mathless plain text from latexml output
             parser = etree.XMLParser()
-            if not os.path.isfile(tmp_xml_path):  # Check if smth went wrong with parsing latex to temporary xml file
+            # check if smth went wrong with parsing latex to temporary xml file
+            if not os.path.isfile(tmp_xml_path):
                 # print('FAILED {}. skipping'.format(aid))
                 log(('\n--- {} ---\n{}\n----------\n'
                      '').format(aid, 'no tralics output'))
                 continue
             with open(tmp_xml_path) as f:
                 try:
-                    tree = etree.parse(f, parser)  # Get tree of XML hierarchy
-                except (etree.XMLSyntaxError, UnicodeDecodeError) as e:  # Catch exception to faulty XML file
+                    tree = etree.parse(f, parser)  # get tree of XML hierarchy
+                # catch exception to faulty XML file
+                except (etree.XMLSyntaxError, UnicodeDecodeError) as e:
                     # print('FAILED {}. skipping'.format(aid))
                     log('\n--- {} ---\n{}\n----------\n'.format(aid, e))
                     continue
-                # tags things that could be treated specially
-                # - <Metadata>
-                #     - <title>
-                #     - <authors><author>
-                # - <head>
-                # - <proof>
-                # - <abstract>
-                # - <maketitle>
-                # - <list> (might be used for larger chunks of text like
-                #           related work)
-                #
-                # tags *NOT* to touch
-                # - <unknown>: can surround whole content
+            # tags things that could be treated specially
+            # - <Metadata>
+            #     - <title>
+            #     - <authors><author>
+            # - <head>
+            # - <proof>
+            # - <abstract>
+            # - <maketitle>
+            # - <list> (might be used for larger chunks of text like
+            #           related work)
+            #
+            # tags *NOT* to touch
+            # - <unknown>: can surround whole content
 
-                # Combined with csv output
-                # with jsonlines.open('figure_json.jsonl',
-                # mode='a') as writer:  # Put all figures with ids and captions in json file
-                for stag in tree.xpath('//{}'.format('figure')):
-                    figure_uuid = uuid.uuid4()  # Create uuid for each figure
-                    caption_text = ''
-                    for element in stag.iter():
-                        if element.tag == 'caption':
-                            if element.text is not None:
-                                caption_text += element.text + ' '
-                    if len(caption_text) >= 1:
-                        stag.tail = '{{{{figure:{}}}}} {}'.format(
-                            1, caption_text
-                        )
-                        # generate json line
-                        line = {
-                            'id': str(figure_uuid),
-                            'caption': caption_text
-                        }
-                        # Generate csv line
-                        line_csv = [
-                            str(figure_uuid),
-                            caption_text
-                        ]
-                        lines_figures.append(line_csv)
-                        line = json.dumps(line)
-                        # writer.write(line)
-                    else:
-                        stag.tail = '{{{{figure:{}}}}}'.format(figure_uuid)
-                        # generate json line
-                        line = {
-                            'id': str(figure_uuid),
-                            'caption': 'no-caption'
-                        }
-                        # Generate csv line
-                        line_csv = [
-                            str(figure_uuid),
-                            'no-caption'
-                        ]
-                        lines_figures.append(line_csv)
-                        line = json.dumps(line)
-                        # writer.write(line)
-            # Add all generated csv lines to file
-            write_to_csv(OUT_DIR, 'figure_csv', ['id', 'caption'], lines_figures)
-            etree.strip_elements(tree, 'figure', with_tail=False)  # Delete all figure tags from xml file
-
-            # Combined with csv output
-            # with jsonlines.open('table_json.jsonl', mode='a') as writer:
-            for stag in tree.xpath('//{}'.format('table')):
-                # uuid
-                table_uuid = uuid.uuid4()
-                caption_text = ''
-                for element in stag.iter():
-                    if element.tag == 'caption':
-                        if element.text is not None:
-                            caption_text += element.text + ' '
-                if len(caption_text) >= 1:
-                    stag.tail = '{{{{table:{}}}}} {}'.format(
-                        1, caption_text
-                    )
-                    # generate json line
-                    line = {
-                        'id': str(table_uuid),
-                        'caption': caption_text
-                    }
-                    # Generate csv line
-                    line_csv = [
-                        str(table_uuid),
-                        caption_text
-                    ]
-                    lines_tables.append(line_csv)
-                    line = json.dumps(line)
-                    # writer.write(line)
+            # figures and tables
+            # # come in the follwoingforms:
+            # # - <figure/table><head>caption text ...
+            # # - <figure/table><caption>caption text ...
+            # # - <float type="figure/table"><caption>caption text ...
+            ftags = tree.xpath('//{}'.format('figure'))
+            ttags = tree.xpath('//{}'.format('table'))
+            fltags = tree.xpath('//{}'.format('float'))
+            for xtag in ftags + ttags + fltags:
+                if xtag.tag in ['figure', 'table']:
+                    treat_as_type = xtag.tag
                 else:
-                    stag.tail = '{{{{table:{}}}}}'.format(table_uuid)
-                    # generate json line
-                    line = {
-                        'id': str(table_uuid),
-                        'caption': 'no-caption'
-                    }
-                    # Generate csv line
-                    line_csv = [
-                        str(table_uuid),
-                        'no-caption'
-                    ]
+                    assert xtag.tag == 'float'
+                    if xtag.get('type') in ['figure', 'table']:
+                        treat_as_type = xtag.get('type')
+                    else:
+                        continue
+                elem_uuid = uuid.uuid4()  # create uuid for each figure
+                caption_text = ''
+                for element in xtag.iter():
+                    if element.tag in ['head', 'caption']:
+                        elem_text = etree.tostring(
+                            element,
+                            encoding='unicode',
+                            method='text',
+                            with_tail=False
+                        )
+                        if len(elem_text) > 0:
+                            caption_text += elem_text
+                            caption_text += ' '
+                if len(caption_text) < 1:
+                    caption_text = 'NO_CAPTION'
+
+                xtag.tail = '{{{{{}:{}}}}}'.format(treat_as_type, elem_uuid)
+                # generate csv line
+                line_csv = [
+                    str(elem_uuid),
+                    ''.join(caption_text.splitlines())
+                ]
+                if treat_as_type == 'figure':
+                    lines_figures.append(line_csv)
+                elif treat_as_type == 'table':
                     lines_tables.append(line_csv)
-                    line = json.dumps(line)
-                    # writer.write(line)
-            # Add all generated csv lines to file
-            write_to_csv(OUT_DIR, 'table_csv', ['id', 'caption'], lines_tables)
+            # add all generated csv lines to file
+            write_to_csv(
+                OUT_DIR,
+                'figures',
+                ['id', 'caption'],
+                lines_figures
+            )
+            write_to_csv(
+                OUT_DIR,
+                'tables',
+                ['id', 'caption'],
+                lines_tables
+            )
+            # delete all figure/table/float tags from xml file
+            etree.strip_elements(tree, 'figure', with_tail=False)
+            etree.strip_elements(tree, 'table', with_tail=False)
+            etree.strip_elements(tree, 'float', with_tail=False)
 
-            etree.strip_elements(tree, 'table', with_tail=False)  # Delete all table files from XML file
-
-            # Combined with csv output
-            # with jsonlines.open('formula_json.jsonl', mode='a') as writer:
-            for stag in tree.xpath('//{}'.format('formula')):
-                content = stag.tail
-                doc_name = fn
-                try:
-                    items = [
-                        stag[1].text.encode('utf-8'),
-                        doc_name.encode('utf-8')
-                    ]
-                except:
-                    items = ['none-type'.encode('utf-8')]
+            for ftag in tree.xpath('//{}'.format('formula')):
                 # uuid
                 formula_uuid = uuid.uuid4()
-                if stag.tail:
-                    stag.tail = '{{{{formula:{}}}}} {}'.format(
-                        formula_uuid,
-                        content
-                    )
-                    # generate json line
-                    line = {
-                        'id': str(formula_uuid),
-                        'content': stag[1].text
-                    }
-                    # Generate csv line
-                    line_csv = [
-                        str(formula_uuid),
-                        stag[1].text
-                    ]
-                    lines_formulas.append(line_csv)
-                    line = json.dumps(line)
-                    # writer.write(line)
+                latex_content = etree.tostring(
+                    ftag.find('texmath'),
+                    encoding='unicode',
+                    method='text',
+                    with_tail=False
+                )
+                mathml_content = etree.tostring(
+                    etree.ETXPath(
+                        '{http://www.w3.org/1998/Math/MathML}math'
+                    )(ftag)[0],
+                    encoding='unicode',
+                    method='xml',
+                    with_tail=False
+                )
+                if ftag.tail:
+                    new_tail = ' {}'.format(ftag.tail)
                 else:
-                    stag.tail = '{{{{formula:{}}}}}'.format(formula_uuid)
-                    # generate json line
-                    line = {
-                        'id': str(formula_uuid),
-                        'content': 'no-content'
-                    }
-                    # Generate csv line
-                    line_csv = [
-                        str(formula_uuid),
-                        'no-content'
-                    ]
-                    lines_formulas.append(line_csv)
-                    line = json.dumps(line)
-                    # writer.write(line)
-            # Add all generated csv lines to file
-            write_to_csv(OUT_DIR, 'formula_csv', ['id', 'caption'], lines_formulas)
-
-            etree.strip_elements(tree, 'formula', with_tail=False)  # Remove all formula tag from XML file
+                    new_tail = ''
+                ftag.tail = '{{{{formula:{}}}}}{}'.format(
+                     formula_uuid,
+                     new_tail
+                )
+                # Generate csv line
+                line_csv = [
+                    str(formula_uuid),
+                    ''.join(latex_content.splitlines()),
+                    ''.join(mathml_content.splitlines())
+                ]
+                lines_formulas.append(line_csv)
+            # add all generated csv lines to file
+            write_to_csv(
+                OUT_DIR,
+                'formulas',
+                ['id', 'latex', 'mathml'],
+                lines_formulas
+            )
+            # remove all formula tags from XML file
+            etree.strip_elements(tree, 'formula', with_tail=False)
 
             # remove title and authors (works only in a few papers)
             attributes = ['title', 'author', 'date', 'thanks']  # keywords
             for attribute in attributes:
                 etree.strip_elements(tree, attribute, with_tail=False)
             # mark sections (works in most papers)
-            for stag in tree.xpath('//{}'.format('div0')):
-                stag[0].text = '<section>{}</section>'.format(stag[0].text)
+            for dtag in tree.xpath('//{}'.format('div0')):
+                dtag[0].text = '<section>{}</section>'.format(dtag[0].text)
             # mark subsections (works in most papers)
-            for stag in tree.xpath('//{}'.format('div1')):
-                stag[0].text = '<subsection>{}</subsection>'.format(
-                    stag[0].text
+            for dtag in tree.xpath('//{}'.format('div1')):
+                dtag[0].text = '<subsection>{}</subsection>'.format(
+                    dtag[0].text
                 )
             # mark subsubsections (works in most papers)
-            for stag in tree.xpath('//{}'.format('div2')):
-                stag[0].text = '<subsubsection>{}</subsubsection>'.format(
-                    stag[0].text
+            for dtag in tree.xpath('//{}'.format('div2')):
+                dtag[0].text = '<subsubsection>{}</subsubsection>'.format(
+                    dtag[0].text
                 )
             # remove what is most likely noise
             mby_noise = tree.xpath('//unexpected')
@@ -321,13 +285,15 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 for child in containing_p.getchildren():
                     if child.text:
                         child.text = '{}'.format(child.text)
-                text = etree.tostring(containing_p,
-                                      encoding='unicode',
-                                      method='text')
-                text = re.sub('\s+', ' ', text).strip()
+                text = etree.tostring(
+                    containing_p,
+                    encoding='unicode',
+                    method='text'
+                )
+                text = re.sub(r'\s+', ' ', text).strip()
                 # replace the uuid of formulas in reference string
-                text = re.sub(r'(^{{formula:)(.*)', '', text)
-                sha_hash = str(uuid.uuid4())  # That does nothing
+                # NOTE: commented out line below b/c it removes information
+                # text = re.sub(r'(^{{formula:)(.*)', '', text)
                 sha_hash = sha1()
                 items = [text.encode('utf-8'), str(aid).encode('utf-8')]
                 for item in items:
@@ -336,18 +302,16 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 local_key = bi.get('id')
                 bibkey_map[local_key] = sha_hash_string
 
-                # Contents of bibitem table
-                try:
-                    line_csv = [
-                        sha_hash_string,
-                        aid,
-                        text
-                    ]
-                    lines_bibitem.append(line_csv)
-                    # session.add(bibitem_db)
-                    # session.flush()
-                except:  # idk what this does
-                    continue
+                # contents of bibitem table
+                line_csv = [
+                    sha_hash_string,
+                    aid,
+                    text
+                ]
+                lines_bibitem.append(line_csv)
+
+                # TODO: check if code below makes sense and/or
+                #       needs refactoring
 
                 # nach arxiv Kategorie Filtern können
                 # --> wissenschaftliche Disziplin mit abspeichern
@@ -370,10 +334,8 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                             link
                         ]
 
-                    # session.add(map_db)
-                    # session.flush()
-
-                    # ugly solution but no other way to get the primary key of the other dbs
+                    # ugly solution but no other way to get the primary key
+                    # of the other dbs
                     if len(line_arxiv) > 0:
                         # line_arxiv.insert(0, local_id)
                         line_arxiv.insert(0, i)
@@ -384,22 +346,6 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                         line_link.insert(0, j)
                         lines_bibitemlinkmap.append(line_link)
                         j += 1
-
-                # make refs db a json (how to check unique constraint?)
-                """
-                with jsonlines.open('refs.jsonl', mode='a') as writer:
-
-                line = {{'uuid':sha_hash_string,
-                        'citing_arxiv_id':aid,
-                        'citing_arxiv_categories':[],
-                        'citing_paper_file':fn,
-                        'cited_arxiv_id':None,
-                        'cited_openalex_id':None,
-                        'cited_doi':None,
-                        'reference_text':text,
-                        'reference_links':[link],
-                        'reference_arxiv_ids':[id_part]}}
-                """
 
             citations = tree.xpath('//cit')
             for cit in citations:
@@ -432,11 +378,26 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
 
             with open(out_txt_path, 'w') as f:
                 f.write(tree_str)
-            # session.commit()
-        # Write db file contents in csv
-        write_to_csv(OUT_DIR, 'bibitem_csv', ['uuid', 'in_doc', 'bibitem_string'], lines_bibitem)
-        write_to_csv(OUT_DIR, 'bibitemarividmap_csv', ['id', 'uuid', 'arxiv_id'], lines_bibitemarxividmap)
-        write_to_csv(OUT_DIR, 'bibitemlinkmap_csv', ['id', 'uuid', 'link'], lines_bibitemlinkmap)
+
+        # write contents in csv
+        write_to_csv(
+            OUT_DIR,
+            'bibitem',
+            ['uuid', 'in_doc', 'bibitem_string'],
+            lines_bibitem
+        )
+        write_to_csv(
+            OUT_DIR,
+            'bibitemarividmap',
+            ['id', 'uuid', 'arxiv_id'],
+            lines_bibitemarxividmap
+        )
+        write_to_csv(
+            OUT_DIR,
+            'bibitemlinkmap',
+            ['id', 'uuid', 'link'],
+            lines_bibitemlinkmap
+        )
 
     log(('Citations: {} (not unique)\nUnmatched citations: {}'
          '').format(num_citations, num_citations_notfound))
