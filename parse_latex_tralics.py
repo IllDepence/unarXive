@@ -218,12 +218,14 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                      new_tail
                 )
                 # Generate csv line
+                del_pre = len(
+                    '<math xmlns="http://www.w3.org/1998/Math/MathML">'
+                )
+                del_post = len('</math>')
                 line_csv = [
                     str(formula_uuid),
                     ''.join(latex_content.splitlines()),
-                    # [51:-7] removes the surrounding
-                    # <math xmlns=""[...]/MathML""> and </math>
-                    ''.join(mathml_content.splitlines())[51:-7]
+                    ''.join(mathml_content.splitlines())[del_pre:-del_post]
                 ]
                 lines_formulas.append(line_csv)
             # add all generated csv lines to file
