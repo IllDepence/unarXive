@@ -13,6 +13,8 @@
 * run `prase_latex_tralics.py` on normalized LaTeX files
 
 ### Testruns
+...
+
 
 ##### 2017 data
 ```
@@ -30,6 +32,20 @@ sys     74m5,791s
 
 ### TODOs
 * investigate low rate of table and figure captions
+
+### Misc
+for a formula tag `t`, testing whether its string representation returned by
+```
+etree.tostring(
+    etree.ETXPath(
+        '{http://www.w3.org/1998/Math/MathML}math'
+    )(t)[0],
+    encoding='unicode',
+    method='text',
+    with_tail=False
+)
+```
+contains a space (“ ”) apppears to be a usable heuristic to decide whether or not it can safely be printed as a unicode string w/o loosing any information (e.g. super/subscript)
 
 ### Troubleshooting
 If the creation of the virtual enviroment fails try [this](https://stackoverflow.com/questions/5178416/libxml-install-error-using-pip)
