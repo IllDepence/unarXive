@@ -168,6 +168,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 # generate csv line
                 line_csv = [
                     str(elem_uuid),
+                    aid,
                     ''.join(caption_text.splitlines())
                 ]
                 if treat_as_type == 'figure':
@@ -178,13 +179,13 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             write_to_csv(
                 OUT_DIR,
                 'figures',
-                ['id', 'caption'],
+                ['id', 'in_doc', 'caption'],
                 lines_figures
             )
             write_to_csv(
                 OUT_DIR,
                 'tables',
-                ['id', 'caption'],
+                ['id', 'in_doc', 'caption'],
                 lines_tables
             )
             # delete all figure/table/float tags from xml file
@@ -224,6 +225,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 del_post = len('</math>')
                 line_csv = [
                     str(formula_uuid),
+                    aid,
                     ''.join(latex_content.splitlines()),
                     ''.join(mathml_content.splitlines())[del_pre:-del_post]
                 ]
@@ -232,7 +234,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             write_to_csv(
                 OUT_DIR,
                 'formulas',
-                ['id', 'latex', 'mathml'],
+                ['id', 'in_doc', 'latex', 'mathml'],
                 lines_formulas
             )
             # remove all formula tags from XML file
@@ -244,15 +246,15 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 etree.strip_elements(tree, attribute, with_tail=False)
             # mark sections (works in most papers)
             for dtag in tree.xpath('//{}'.format('div0')):
-                dtag[0].text = '<section>{}</section>'.format(dtag[0].text)
+                dtag[0].text = '\n<section>{}</section>'.format(dtag[0].text)
             # mark subsections (works in most papers)
             for dtag in tree.xpath('//{}'.format('div1')):
-                dtag[0].text = '<subsection>{}</subsection>'.format(
+                dtag[0].text = '\n<subsection>{}</subsection>'.format(
                     dtag[0].text
                 )
             # mark subsubsections (works in most papers)
             for dtag in tree.xpath('//{}'.format('div2')):
-                dtag[0].text = '<subsubsection>{}</subsubsection>'.format(
+                dtag[0].text = '\n<subsubsection>{}</subsubsection>'.format(
                     dtag[0].text
                 )
             # remove what is most likely noise
@@ -291,8 +293,8 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     method='text'
                 )
                 text = re.sub(r'\s+', ' ', text).strip()
-                # replace the uuid of formulas in reference string
-                # NOTE: commented out line below b/c it removes information
+                # NOTE: commented out lines below b/c it removes information
+                # # replace the uuid of formulas in reference string
                 # text = re.sub(r'(^{{formula:)(.*)', '', text)
                 sha_hash = sha1()
                 items = [text.encode('utf-8'), str(aid).encode('utf-8')]
@@ -318,12 +320,14 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                         id_part = match.group(1)
                         line_arxiv = [
                             sha_hash_string,
+                            aid,
                             id_part
                         ]
                         lines_bibitemarxividmap.append(line_arxiv)
                     else:
                         line_link = [
                             sha_hash_string,
+                            aid,
                             link
                         ]
                         lines_bibitemlinkmap.append(line_link)
@@ -364,19 +368,19 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
         write_to_csv(
             OUT_DIR,
             'bibitem',
-            ['uuid', 'in_doc', 'bibitem_string'],
+            ['id', 'in_doc', 'bibitem_string'],
             lines_bibitem
         )
         write_to_csv(
             OUT_DIR,
             'bibitemarividmap',
-            ['uuid', 'arxiv_id'],
+            ['id', 'in_doc', 'arxiv_id'],
             lines_bibitemarxividmap
         )
         write_to_csv(
             OUT_DIR,
             'bibitemlinkmap',
-            ['uuid', 'link'],
+            ['id', 'in_doc', 'link'],
             lines_bibitemlinkmap
         )
 

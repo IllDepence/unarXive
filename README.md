@@ -13,7 +13,18 @@
 * run `prase_latex_tralics.py` on normalized LaTeX files
 
 ### Testruns
-...
+```
+(venv) ys8950@aifb-ls3-icarus:/opt/unarXive/unarXive_update_2022/hiwi_task_220629_latexparse$ time python3 prepare.py /mnt/lsdf_clasics/data/arxiv-2022-wip/copied_src_files/ /opt/unarXive/unarXive_update_2022/unarXive_2022_wip_2018data_parsed/
+1/392
+[...]
+392/392
+140616 files
+13430 PDFs
+
+real    504m4,681s
+user    373m41,079s
+sys     59m28,106s
+```
 
 
 ##### 2017 data
