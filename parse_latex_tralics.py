@@ -11,6 +11,7 @@ import uuid
 from lxml import etree
 from hashlib import sha1
 import csv
+import jsonlines
 
 PDF_EXT_PATT = re.compile(r'^\.pdf$', re.I)
 ARXIV_URL_PATT = re.compile(
@@ -52,14 +53,20 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
 
     num_citations = 0
     num_citations_notfound = 0
+    file_iterator = 0
+    item_json_dicts_list = []
+    jsonl_chunk_counter = 1
 
     # iterate over each file in input directory
     for fn in os.listdir(IN_DIR):
         path = os.path.join(IN_DIR, fn)  # absolute path to current file
+        print("current file:",path)
         aid, ext = os.path.splitext(fn)  # get file extension
         # make txt file for each file
-        out_txt_path = os.path.join(OUT_DIR, '{}.txt'.format(aid))
-        out_json_path = os.path.join(OUT_DIR, '{}.json'.format(aid))
+        aid_chunk = aid+"_"+str(jsonl_chunk_counter)
+        out_txt_path = os.path.join(OUT_DIR, '{}.txt'.format(aid)) # was aid before
+        out_json_path = os.path.join(OUT_DIR, '{}.jsonl'.format(str('chunk_'+str(jsonl_chunk_counter))))
+
 
         # skip already existing files
         if INCREMENTAL and os.path.isfile(out_txt_path): #is usually false
@@ -94,7 +101,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             try:
                 subprocess.run(tralics_args, stdout=out, stderr=err, timeout=5)
             except subprocess.TimeoutExpired as e:
-                # print('FAILED {}. skipping'.format(aid))
+                #print('FAILED {}. skipping'.format(aid))
                 log('\n--- {} ---\n{}\n----------\n'.format(aid, e))
                 continue
             out.close()
@@ -102,6 +109,12 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
 
             # get mathless plain text from latexml output
             parser = etree.XMLParser()
+
+            # test-wise: print content of xml
+            #with open(tmp_xml_path,'r') as testxml:
+            #    print("#################################################################################################################################")
+            #    print(testxml.read())
+
             # check if smth went wrong with parsing latex to temporary xml file
             if not os.path.isfile(tmp_xml_path):
                 # print('FAILED {}. skipping'.format(aid))
@@ -111,9 +124,11 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             with open(tmp_xml_path) as f:
                 try:
                     tree = etree.parse(f, parser)  # get tree of XML hierarchy
+                    print("tree worked")
+                    file_iterator += 1
                 # catch exception to faulty XML file
                 except (etree.XMLSyntaxError, UnicodeDecodeError) as e:
-                    # print('FAILED {}. skipping'.format(aid))
+                    #print('FAILED {}. skipping'.format(aid))
                     log('\n--- {} ---\n{}\n----------\n'.format(aid, e))
                     continue
             # tags things that could be treated specially
@@ -157,8 +172,22 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
 
             item_json_dict = {}
             item_json_dict['paper_id'] = aid
-            item_json_dict['_pdf_hash'] = "TO-DO: CALC HASH of file"
-            item_json_dict['abstract'] = [] #not included in parse results?
+            item_json_dict['pdf_hash'] = None
+
+            source_file_hasher = sha1()
+            with open(path, 'rb') as source_file:
+                buf = source_file.read()
+                source_file_hasher.update(buf)
+                source_file_hash = str(source_file_hasher.hexdigest())
+
+            item_json_dict['source_hash'] = source_file_hash
+
+            item_json_dict['abstract'] = [{
+                    'section': 'Abstract''',
+                    'text': '', # Abstract text goes here
+                    'cite_spans': [],
+                    'ref_spans': []
+                }]  #not included in parse results
 
             # get xml tags
             ftags = tree.xpath('//{}'.format('figure'))
@@ -166,8 +195,6 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             fltags = tree.xpath('//{}'.format('float'))
 
             item_json_dict['ref_entries'] = {}
-            ref_item_counter_figure = 0
-            ref_item_counter_table = 0
 
             for xtag in ftags + ttags + fltags:
                 if xtag.tag in ['figure', 'table']:
@@ -195,49 +222,22 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     caption_text = 'NO_CAPTION'
 
                 xtag.tail = '{{{{{}:{}}}}}'.format(treat_as_type, elem_uuid)
-                # generate csv line
-                line_csv = [
-                    str(elem_uuid),
-                    aid,
-                    ''.join(caption_text.splitlines())
-                ]
-                if treat_as_type == 'figure':
-                    lines_figures.append(line_csv)
 
-                    item_json_dict['ref_entries'][f'FIGREF{ref_item_counter_figure}'] =  {
-                        'text': ''.join(caption_text.splitlines()),
-                        'type': 'figure',
-                        'id': elem_uuid}
-                    ref_item_counter_figure += 1
+                if treat_as_type == 'figure':
+                    item_json_dict['ref_entries'][str(elem_uuid)] =  {
+                        'caption': ''.join(caption_text.splitlines()),
+                        'type': 'figure'}
 
                 elif treat_as_type == 'table':
-                    lines_tables.append(line_csv)
+                    item_json_dict['ref_entries'][str(elem_uuid)] = {
+                        'caption': ''.join(caption_text.splitlines()),
+                        'type': 'table'}
 
-                    item_json_dict['ref_entries'][f'TABREF{ref_item_counter_table}'] = {
-                        'text': ''.join(caption_text.splitlines()),
-                        'type': 'table',
-                        'id': elem_uuid}
-                    ref_item_counter_table += 1
-
-            # add all generated csv lines to file
-            write_to_csv(
-                OUT_DIR,
-                'figures',
-                ['id', 'in_doc', 'caption'],
-                lines_figures
-            )
-            write_to_csv(
-                OUT_DIR,
-                'tables',
-                ['id', 'in_doc', 'caption'],
-                lines_tables
-            )
             # delete all figure/table/float tags from xml file
             etree.strip_elements(tree, 'figure', with_tail=False)
             etree.strip_elements(tree, 'table', with_tail=False)
             etree.strip_elements(tree, 'float', with_tail=False)
 
-            ref_item_counter_formula = 0
 
             for ftag in tree.xpath('//{}'.format('formula')):
                 # uuid
@@ -264,32 +264,11 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                      formula_uuid,
                      new_tail
                 )
-                # Generate csv line
-                del_pre = len(
-                    '<math xmlns="http://www.w3.org/1998/Math/MathML">'
-                )
-                del_post = len('</math>')
-                line_csv = [
-                    str(formula_uuid),
-                    aid,
-                    ''.join(latex_content.splitlines()),
-                    ''.join(mathml_content.splitlines())[del_pre:-del_post]
-                ]
-                lines_formulas.append(line_csv)
 
-                item_json_dict['ref_entries'][f'FORMULAREF{ref_item_counter_formula}'] = {
+                item_json_dict['ref_entries'][str(formula_uuid)] = {
                     'latex': ''.join(latex_content.splitlines()),
-                    'mathml': ''.join(mathml_content.splitlines())[del_pre:-del_post],
-                    'id': str(formula_uuid)}
-                ref_item_counter_formula += 1
+                    'type': 'formula'}
 
-            # add all generated csv lines to file
-            write_to_csv(
-                OUT_DIR,
-                'formulas',
-                ['id', 'in_doc', 'latex', 'mathml'],
-                lines_formulas
-            )
             # remove all formula tags from XML file
             etree.strip_elements(tree, 'formula', with_tail=False)
 
@@ -360,49 +339,25 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 local_key = bi.get('id')
                 bibkey_map[local_key] = sha_hash_string
 
-                # contents of bibitem CSV
-                line_csv = [
-                    sha_hash_string,
-                    aid,
-                    text
-                ]
-                lines_bibitem.append(line_csv)
+                item_json_dict['bib_entries'][sha_hash_string] = {
+                    'bib_entry_raw' : text
+                }
 
-                item_json_dict['bib_entries'][f'BIBREF{bib_item_counter}'] = {
-                    'id': sha_hash_string,
-                    'in_doc:': aid, # not needed bc already clear?
-                    'bibitem_string' : text}
+                contained_arXiv_ids_list = []
+                contained_links_list = []
 
-                # ^ example:  # "bed0389f814aeb6d47aec1af1d287b3fa96c00b4",
-                # "2104.06797",
-                # "M. Levoy and P. Hanrahan, “Light field rendering,” in Proceedings of the 23rd annual
-                # conference on Computer graphics and interactive techniques. ACM, 1996, pp. 31–
-                #METADATA_KEYS = {
-                 #   "title", "authors", "year", "venue", "identifiers"
-                #}
-
-                # Contents of bibitemarxividmap and bibitemlink db
                 for xref in containing_p.findall('xref'):
                     link = xref.get('url')
                     match = ARXIV_URL_PATT.search(link)
                     if match:
                         id_part = match.group(1)
-                        line_arxiv = [
-                            sha_hash_string,
-                            aid,
-                            id_part
-                        ]
-                        lines_bibitemarxividmap.append(line_arxiv)
-                    else:
-                        line_link = [
-                            sha_hash_string,
-                            aid,
-                            link
-                        ]
-                        lines_bibitemlinkmap.append(line_link)
+                        contained_arXiv_ids_list.append(id_part)
 
-                item_json_dict['bib_entries'][f'BIBREF{bib_item_counter}']['arxiv_id'] = id_part
-                item_json_dict['bib_entries'][f'BIBREF{bib_item_counter}']['link'] = link
+                    else:
+                        contained_links_list.append(link)
+
+                item_json_dict['bib_entries'][sha_hash_string]['contained_arXiv_ids'] = contained_arXiv_ids_list
+                item_json_dict['bib_entries'][sha_hash_string]['contained_links'] = contained_links_list
 
                 bib_item_counter += 1
 
@@ -435,34 +390,31 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             tree_str = etree.tostring(tree, encoding='unicode', method='text')
             # tree_str = re.sub('\s+', ' ', tree_str).strip()
 
-            with open(out_txt_path, 'w') as f:
-                f.write(tree_str)
+            item_json_dict['body_text'] = [{
+                'section': '',
+                'text': tree_str,
+                'cite_spans': [],
+                'ref_spans': []
+            }]
 
-            item_json_dict['body_text'] = tree_str
+        # write dictionary to json object (one per 100k items)
+        item_json_dicts_list.append(item_json_dict)
 
-        # write dictionary to json object (one per item)
-        with open(out_json_path, 'w', encoding='utf8') as outfile:
-            json.dump(item_json_dict, outfile)
+        # write a chunk of 100k items as .jsonl object, one object per line
+        if file_iterator % 1000000 == 0:
+            with jsonlines.open(out_json_path, 'w') as writer:
+                print("Writing JSONL FOR",out_json_path)
+                writer.write_all(item_json_dicts_list)
+            item_json_dicts_list = []
+            jsonl_chunk_counter += 1
 
-        # write contents in csv
-        write_to_csv(
-            OUT_DIR,
-            'bibitem',
-            ['id', 'in_doc', 'bibitem_string'],
-            lines_bibitem
-        )
-        write_to_csv(
-            OUT_DIR,
-            'bibitemarividmap',
-            ['id', 'in_doc', 'arxiv_id'],
-            lines_bibitemarxividmap
-        )
-        write_to_csv(
-            OUT_DIR,
-            'bibitemlinkmap',
-            ['id', 'in_doc', 'link'],
-            lines_bibitemlinkmap
-        )
+    # write last remaining objects
+    if not file_iterator % 1000000 == 0:
+        with jsonlines.open(out_json_path, 'w') as writer:
+            print("Writing JSONL finally FOR", out_json_path)
+            writer.write_all(item_json_dicts_list)
+        item_json_dicts_list = []
+        jsonl_chunk_counter += 1
 
     log(('Citations: {} (not unique)\nUnmatched citations: {}'
          '').format(num_citations, num_citations_notfound))
