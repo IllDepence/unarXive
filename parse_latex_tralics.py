@@ -219,9 +219,17 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                      new_tail
                 )
                 # Generate csv line
-                del_pre = len(
+                mathml_tag_short = (
                     '<math xmlns="http://www.w3.org/1998/Math/MathML">'
                 )
+                mathml_tag_long = (
+                    '<math xmlns="http://www.w3.org/1998/Math/MathML" '
+                    'mode="display">'
+                )
+                if mathml_tag_short in mathml_content:
+                    del_pre = len(mathml_tag_long)
+                else:
+                    del_pre = len(mathml_tag_short)
                 del_post = len('</math>')
                 line_csv = [
                     str(formula_uuid),
