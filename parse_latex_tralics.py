@@ -31,8 +31,12 @@ def write_to_csv(output_dir, filename, header, lines):
             csv_writer.writerow(header)
         csv_writer.writerows(lines)
 
+# ex JSON
+#{"paper_id": "77499681", "_pdf_hash": "11f281316fe4638843a83cf559ce4f60aade00f8", "abstract": [{"section": "Abstract", "text": "The purpose
 
 def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
+    #methode die verzeichnis annimmt und alle dateien drin durchgeht
+    #erstellt für alle ein volltext.txt und alle besonderen objekte in nem .csv
     # Start setup of parse
     def log(msg):
         if write_logs:
@@ -55,8 +59,10 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
         aid, ext = os.path.splitext(fn)  # get file extension
         # make txt file for each file
         out_txt_path = os.path.join(OUT_DIR, '{}.txt'.format(aid))
+        out_json_path = os.path.join(OUT_DIR, '{}.json'.format(aid))
+
         # skip already existing files
-        if INCREMENTAL and os.path.isfile(out_txt_path):
+        if INCREMENTAL and os.path.isfile(out_txt_path): #is usually false
             # print('{} already in output directory, skipping'.format(aid))
             continue
         # print(aid)
@@ -84,6 +90,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             err = open(os.path.join(tmp_dir_path, 'tralics_out.txt'), mode='w')
             out.write('\n------------- {} -------------\n'.format(aid))
             out.flush()
+
             try:
                 subprocess.run(tralics_args, stdout=out, stderr=err, timeout=5)
             except subprocess.TimeoutExpired as e:
@@ -130,16 +137,38 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             # # - <float type="figure/table"><caption>caption text ...
 
             # setup lists to put in externally saved content
-            lines_figures = []
-            lines_tables = []
-            lines_formulas = []
-            lines_bibitem = []
-            lines_bibitemarxividmap = []
-            lines_bibitemlinkmap = []
+            lines_figures = [] # saves "id","in_doc","caption"
+            # ^example: "3f68e03f-6694-4a52-ae2c-4c627c85e21f",
+            # "2104.06797",
+            # "Two-step strategy for reconstructing a 4D LF from 2D EPIs."
+
+            lines_tables = [] # saves "id","in_doc","caption"
+            lines_formulas = [] # "id","in_doc","latex","mathml"
+            lines_bibitem = [] # "id","in_doc","bibitem_string"
+            # ^example:#"bed0389f814aeb6d47aec1af1d287b3fa96c00b4",
+            # "2104.06797",
+            # "M. Levoy and P. Hanrahan, “Light field rendering,” in Proceedings of the 23rd annual conference on Computer graphics and interactive techniques. ACM, 1996, pp. 31–42."
+
+            lines_bibitemarxividmap = [] #"id","in_doc","arxiv_id"
+            # ^example: "c856f13b494e9282857e6f643d5c76b67b2d10af","2104.06922","1205.4810"
+
+            lines_bibitemlinkmap = [] # "id","in_doc","link"
+            # ^example: "83b3a549af4d2ea8175fa4ba6572fdbc0980801f","2104.06808","http://dx.doi.org/10.1017/S0022112078000907"
+
+            item_json_dict = {}
+            item_json_dict['paper_id'] = aid
+            item_json_dict['_pdf_hash'] = "TO-DO: CALC HASH of file"
+            item_json_dict['abstract'] = [] #not included in parse results?
+
             # get xml tags
             ftags = tree.xpath('//{}'.format('figure'))
             ttags = tree.xpath('//{}'.format('table'))
             fltags = tree.xpath('//{}'.format('float'))
+
+            item_json_dict['ref_entries'] = {}
+            ref_item_counter_figure = 0
+            ref_item_counter_table = 0
+
             for xtag in ftags + ttags + fltags:
                 if xtag.tag in ['figure', 'table']:
                     treat_as_type = xtag.tag
@@ -150,6 +179,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     else:
                         continue
                 elem_uuid = uuid.uuid4()  # create uuid for each figure
+
                 caption_text = ''
                 for element in xtag.iter():
                     if element.tag in ['head', 'caption']:
@@ -173,8 +203,22 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 ]
                 if treat_as_type == 'figure':
                     lines_figures.append(line_csv)
+
+                    item_json_dict['ref_entries'][f'FIGREF{ref_item_counter_figure}'] =  {
+                        'text': ''.join(caption_text.splitlines()),
+                        'type': 'figure',
+                        'id': elem_uuid}
+                    ref_item_counter_figure += 1
+
                 elif treat_as_type == 'table':
                     lines_tables.append(line_csv)
+
+                    item_json_dict['ref_entries'][f'TABREF{ref_item_counter_table}'] = {
+                        'text': ''.join(caption_text.splitlines()),
+                        'type': 'table',
+                        'id': elem_uuid}
+                    ref_item_counter_table += 1
+
             # add all generated csv lines to file
             write_to_csv(
                 OUT_DIR,
@@ -192,6 +236,8 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             etree.strip_elements(tree, 'figure', with_tail=False)
             etree.strip_elements(tree, 'table', with_tail=False)
             etree.strip_elements(tree, 'float', with_tail=False)
+
+            ref_item_counter_formula = 0
 
             for ftag in tree.xpath('//{}'.format('formula')):
                 # uuid
@@ -230,6 +276,13 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     ''.join(mathml_content.splitlines())[del_pre:-del_post]
                 ]
                 lines_formulas.append(line_csv)
+
+                item_json_dict['ref_entries'][f'FORMULAREF{ref_item_counter_formula}'] = {
+                    'latex': ''.join(latex_content.splitlines()),
+                    'mathml': ''.join(mathml_content.splitlines())[del_pre:-del_post],
+                    'id': str(formula_uuid)}
+                ref_item_counter_formula += 1
+
             # add all generated csv lines to file
             write_to_csv(
                 OUT_DIR,
@@ -273,6 +326,9 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             bibitems = tree.xpath('//bibitem')
             bibkey_map = {}
 
+            item_json_dict['bib_entries'] = {}
+            bib_item_counter = 0
+
             for bi in bibitems:
                 containing_p = bi.getparent()
                 try:
@@ -312,6 +368,19 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 ]
                 lines_bibitem.append(line_csv)
 
+                item_json_dict['bib_entries'][f'BIBREF{bib_item_counter}'] = {
+                    'id': sha_hash_string,
+                    'in_doc:': aid, # not needed bc already clear?
+                    'bibitem_string' : text}
+
+                # ^ example:  # "bed0389f814aeb6d47aec1af1d287b3fa96c00b4",
+                # "2104.06797",
+                # "M. Levoy and P. Hanrahan, “Light field rendering,” in Proceedings of the 23rd annual
+                # conference on Computer graphics and interactive techniques. ACM, 1996, pp. 31–
+                #METADATA_KEYS = {
+                 #   "title", "authors", "year", "venue", "identifiers"
+                #}
+
                 # Contents of bibitemarxividmap and bibitemlink db
                 for xref in containing_p.findall('xref'):
                     link = xref.get('url')
@@ -331,6 +400,11 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                             link
                         ]
                         lines_bibitemlinkmap.append(line_link)
+
+                item_json_dict['bib_entries'][f'BIBREF{bib_item_counter}']['arxiv_id'] = id_part
+                item_json_dict['bib_entries'][f'BIBREF{bib_item_counter}']['link'] = link
+
+                bib_item_counter += 1
 
             citations = tree.xpath('//cit')
             for cit in citations:
@@ -363,6 +437,12 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
 
             with open(out_txt_path, 'w') as f:
                 f.write(tree_str)
+
+            item_json_dict['body_text'] = tree_str
+
+        # write dictionary to json object (one per item)
+        with open(out_json_path, 'w', encoding='utf8') as outfile:
+            json.dump(item_json_dict, outfile)
 
         # write contents in csv
         write_to_csv(
@@ -399,3 +479,4 @@ if __name__ == '__main__':
     ret = parse(IN_DIR, OUT_DIR, INCREMENTAL=False)
     if not ret:
         sys.exit()
+
