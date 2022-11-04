@@ -136,9 +136,15 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
             # # - <float type="figure/table"><caption>caption text ...
 
             # start bulding paper dict
-            paper_dict = OrderedDict()
-            paper_dict['paper_id'] = aid
-            paper_dict['pdf_hash'] = None
+            paper_dict = OrderedDict({
+                'paper_id': aid,
+                '_pdf_hash': None,
+                '_source_hash': None,
+                'abstract': [],
+                'body_text': [],
+                'bib_entries': {},
+                'ref_entries': {}
+            })
 
             source_file_hasher = sha1()
             with open(path, 'rb') as source_file:
@@ -149,7 +155,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
                 #        and simply read and store it here afterwards
                 source_file_hash = str(source_file_hasher.hexdigest())
 
-            paper_dict['source_hash'] = source_file_hash
+            paper_dict['_source_hash'] = source_file_hash
 
             paper_dict['abstract'] = [{
                     'section': 'Abstract''',
