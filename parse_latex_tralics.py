@@ -60,16 +60,18 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
     # iterate over each file in input directory
     for fn in os.listdir(IN_DIR):
         path = os.path.join(IN_DIR, fn)  # absolute path to current file
-        print("current file:",path)
+        print("current file:", path)
         aid, ext = os.path.splitext(fn)  # get file extension
         # make txt file for each file
-        aid_chunk = aid+"_"+str(jsonl_chunk_counter)
-        out_txt_path = os.path.join(OUT_DIR, '{}.txt'.format(aid)) # was aid before
-        out_json_path = os.path.join(OUT_DIR, '{}.jsonl'.format(str('chunk_'+str(jsonl_chunk_counter))))
-
+        aid_chunk = aid + "_" + str(jsonl_chunk_counter)  # FIXME: not used
+        out_txt_path = os.path.join(OUT_DIR, '{}.txt'.format(aid))  # was aid
+        out_json_path = os.path.join(
+            OUT_DIR,
+            '{}.jsonl'.format(str('chunk_'+str(jsonl_chunk_counter)))
+        )
 
         # skip already existing files
-        if INCREMENTAL and os.path.isfile(out_txt_path): #is usually false
+        if INCREMENTAL and os.path.isfile(out_txt_path):  # is usually false
             # print('{} already in output directory, skipping'.format(aid))
             continue
         # print(aid)
@@ -101,7 +103,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             try:
                 subprocess.run(tralics_args, stdout=out, stderr=err, timeout=5)
             except subprocess.TimeoutExpired as e:
-                #print('FAILED {}. skipping'.format(aid))
+                # print('FAILED {}. skipping'.format(aid))
                 log('\n--- {} ---\n{}\n----------\n'.format(aid, e))
                 continue
             out.close()
@@ -111,9 +113,9 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             parser = etree.XMLParser()
 
             # test-wise: print content of xml
-            #with open(tmp_xml_path,'r') as testxml:
-            #    print("#################################################################################################################################")
-            #    print(testxml.read())
+            # with open(tmp_xml_path,'r') as testxml:
+            #     print("#################################################################################################################################")
+            #     print(testxml.read())
 
             # check if smth went wrong with parsing latex to temporary xml file
             if not os.path.isfile(tmp_xml_path):
@@ -128,7 +130,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     file_iterator += 1
                 # catch exception to faulty XML file
                 except (etree.XMLSyntaxError, UnicodeDecodeError) as e:
-                    #print('FAILED {}. skipping'.format(aid))
+                    # print('FAILED {}. skipping'.format(aid))
                     log('\n--- {} ---\n{}\n----------\n'.format(aid, e))
                     continue
             # tags things that could be treated specially
@@ -152,23 +154,27 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             # # - <float type="figure/table"><caption>caption text ...
 
             # setup lists to put in externally saved content
-            lines_figures = [] # saves "id","in_doc","caption"
+            lines_figures = []  # saves "id","in_doc","caption"
             # ^example: "3f68e03f-6694-4a52-ae2c-4c627c85e21f",
             # "2104.06797",
             # "Two-step strategy for reconstructing a 4D LF from 2D EPIs."
 
-            lines_tables = [] # saves "id","in_doc","caption"
-            lines_formulas = [] # "id","in_doc","latex","mathml"
-            lines_bibitem = [] # "id","in_doc","bibitem_string"
+            lines_tables = []  # saves "id","in_doc","caption"
+            lines_formulas = []  # "id","in_doc","latex","mathml"
+            lines_bibitem = []  # "id","in_doc","bibitem_string"
             # ^example:#"bed0389f814aeb6d47aec1af1d287b3fa96c00b4",
             # "2104.06797",
-            # "M. Levoy and P. Hanrahan, “Light field rendering,” in Proceedings of the 23rd annual conference on Computer graphics and interactive techniques. ACM, 1996, pp. 31–42."
+            # "M. Levoy and P. Hanrahan, “Light field rendering,” in
+            # Proceedings of the 23rd annual conference on Computer graphics
+            # and interactive techniques. ACM, 1996, pp. 31–42."
 
-            lines_bibitemarxividmap = [] #"id","in_doc","arxiv_id"
-            # ^example: "c856f13b494e9282857e6f643d5c76b67b2d10af","2104.06922","1205.4810"
+            lines_bibitemarxividmap = []  # "id","in_doc","arxiv_id"
+            # ^example: "c856f13b494e9282857e6f643d5c76b67b2d10af","2104.06922"
+            # ,"1205.4810"
 
-            lines_bibitemlinkmap = [] # "id","in_doc","link"
-            # ^example: "83b3a549af4d2ea8175fa4ba6572fdbc0980801f","2104.06808","http://dx.doi.org/10.1017/S0022112078000907"
+            lines_bibitemlinkmap = []  # "id","in_doc","link"
+            # ^example: "83b3a549af4d2ea8175fa4ba6572fdbc0980801f","2104.06808"
+            # ,"http://dx.doi.org/10.1017/S0022112078000907"
 
             item_json_dict = {}
             item_json_dict['paper_id'] = aid
@@ -184,10 +190,10 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
 
             item_json_dict['abstract'] = [{
                     'section': 'Abstract''',
-                    'text': '', # Abstract text goes here
+                    'text': '',  # Abstract text goes here
                     'cite_spans': [],
                     'ref_spans': []
-                }]  #not included in parse results
+                }]  # not included in parse results
 
             # get xml tags
             ftags = tree.xpath('//{}'.format('figure'))
@@ -224,7 +230,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 xtag.tail = '{{{{{}:{}}}}}'.format(treat_as_type, elem_uuid)
 
                 if treat_as_type == 'figure':
-                    item_json_dict['ref_entries'][str(elem_uuid)] =  {
+                    item_json_dict['ref_entries'][str(elem_uuid)] = {
                         'caption': ''.join(caption_text.splitlines()),
                         'type': 'figure'}
 
@@ -238,7 +244,6 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             etree.strip_elements(tree, 'table', with_tail=False)
             etree.strip_elements(tree, 'float', with_tail=False)
 
-
             for ftag in tree.xpath('//{}'.format('formula')):
                 # uuid
                 formula_uuid = uuid.uuid4()
@@ -248,14 +253,14 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     method='text',
                     with_tail=False
                 )
-                mathml_content = etree.tostring(
-                    etree.ETXPath(
-                        '{http://www.w3.org/1998/Math/MathML}math'
-                    )(ftag)[0],
-                    encoding='unicode',
-                    method='xml',
-                    with_tail=False
-                )
+                # mathml_content = etree.tostring(
+                #     etree.ETXPath(
+                #         '{http://www.w3.org/1998/Math/MathML}math'
+                #     )(ftag)[0],
+                #     encoding='unicode',
+                #     method='xml',
+                #     with_tail=False
+                # )
                 if ftag.tail:
                     new_tail = ' {}'.format(ftag.tail)
                 else:
@@ -340,7 +345,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 bibkey_map[local_key] = sha_hash_string
 
                 item_json_dict['bib_entries'][sha_hash_string] = {
-                    'bib_entry_raw' : text
+                    'bib_entry_raw': text
                 }
 
                 contained_arXiv_ids_list = []
@@ -356,8 +361,12 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     else:
                         contained_links_list.append(link)
 
-                item_json_dict['bib_entries'][sha_hash_string]['contained_arXiv_ids'] = contained_arXiv_ids_list
-                item_json_dict['bib_entries'][sha_hash_string]['contained_links'] = contained_links_list
+                item_json_dict['bib_entries'][sha_hash_string][
+                    'contained_arXiv_ids'
+                ] = contained_arXiv_ids_list
+                item_json_dict['bib_entries'][sha_hash_string][
+                    'contained_links'
+                ] = contained_links_list
 
                 bib_item_counter += 1
 
@@ -403,7 +412,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
         # write a chunk of 100k items as .jsonl object, one object per line
         if file_iterator % 1000000 == 0:
             with jsonlines.open(out_json_path, 'w') as writer:
-                print("Writing JSONL FOR",out_json_path)
+                print("Writing JSONL FOR", out_json_path)
                 writer.write_all(item_json_dicts_list)
             item_json_dicts_list = []
             jsonl_chunk_counter += 1
@@ -431,4 +440,3 @@ if __name__ == '__main__':
     ret = parse(IN_DIR, OUT_DIR, INCREMENTAL=False)
     if not ret:
         sys.exit()
-
