@@ -1,17 +1,16 @@
-""" Convert latex files to plain text with nice citation markers
+""" Convert LaTeX files to S2ORC like JSONL output
 """
 
-import json
+import jsonlines
 import os
 import re
 import subprocess
 import sys
 import tempfile
 import uuid
-from lxml import etree
+from collections import OrderedDict
 from hashlib import sha1
-import csv
-import jsonlines
+from lxml import etree
 
 PDF_EXT_PATT = re.compile(r'^\.pdf$', re.I)
 ARXIV_URL_PATT = re.compile(
@@ -21,24 +20,7 @@ ARXIV_URL_PATT = re.compile(
 )
 
 
-def write_to_csv(output_dir, filename, header, lines):
-    fn = f'{filename}.csv'
-    fp = os.path.join(output_dir, fn)
-    skip_header = os.path.isfile(fp)
-    with open(fp, 'a', encoding='utf8') as f:
-        # Setup CSV file
-        csv_writer = csv.writer(f, dialect='unix')
-        if not skip_header:
-            csv_writer.writerow(header)
-        csv_writer.writerows(lines)
-
-# ex JSON
-#{"paper_id": "77499681", "_pdf_hash": "11f281316fe4638843a83cf559ce4f60aade00f8", "abstract": [{"section": "Abstract", "text": "The purpose
-
-def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
-    #methode die verzeichnis annimmt und alle dateien drin durchgeht
-    #erstellt für alle ein volltext.txt und alle besonderen objekte in nem .csv
-    # Start setup of parse
+def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
     def log(msg):
         if write_logs:
             with open(os.path.join(OUT_DIR, 'log.txt'), 'a') as f:
@@ -54,7 +36,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
     num_citations = 0
     num_citations_notfound = 0
     file_iterator = 0
-    item_json_dicts_list = []
+    paper_dicts_list = []
     jsonl_chunk_counter = 1
 
     # iterate over each file in input directory
@@ -153,42 +135,23 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             # # - <figure/table><caption>caption text ...
             # # - <float type="figure/table"><caption>caption text ...
 
-            # setup lists to put in externally saved content
-            lines_figures = []  # saves "id","in_doc","caption"
-            # ^example: "3f68e03f-6694-4a52-ae2c-4c627c85e21f",
-            # "2104.06797",
-            # "Two-step strategy for reconstructing a 4D LF from 2D EPIs."
-
-            lines_tables = []  # saves "id","in_doc","caption"
-            lines_formulas = []  # "id","in_doc","latex","mathml"
-            lines_bibitem = []  # "id","in_doc","bibitem_string"
-            # ^example:#"bed0389f814aeb6d47aec1af1d287b3fa96c00b4",
-            # "2104.06797",
-            # "M. Levoy and P. Hanrahan, “Light field rendering,” in
-            # Proceedings of the 23rd annual conference on Computer graphics
-            # and interactive techniques. ACM, 1996, pp. 31–42."
-
-            lines_bibitemarxividmap = []  # "id","in_doc","arxiv_id"
-            # ^example: "c856f13b494e9282857e6f643d5c76b67b2d10af","2104.06922"
-            # ,"1205.4810"
-
-            lines_bibitemlinkmap = []  # "id","in_doc","link"
-            # ^example: "83b3a549af4d2ea8175fa4ba6572fdbc0980801f","2104.06808"
-            # ,"http://dx.doi.org/10.1017/S0022112078000907"
-
-            item_json_dict = {}
-            item_json_dict['paper_id'] = aid
-            item_json_dict['pdf_hash'] = None
+            # start bulding paper dict
+            paper_dict = OrderedDict()
+            paper_dict['paper_id'] = aid
+            paper_dict['pdf_hash'] = None
 
             source_file_hasher = sha1()
             with open(path, 'rb') as source_file:
                 buf = source_file.read()
                 source_file_hasher.update(buf)
+                # FIXME: determine and persist hash of input source file during
+                #        normalization of LaTeX (normalize_arxiv_dump.py)
+                #        and simply read and store it here afterwards
                 source_file_hash = str(source_file_hasher.hexdigest())
 
-            item_json_dict['source_hash'] = source_file_hash
+            paper_dict['source_hash'] = source_file_hash
 
-            item_json_dict['abstract'] = [{
+            paper_dict['abstract'] = [{
                     'section': 'Abstract''',
                     'text': '',  # Abstract text goes here
                     'cite_spans': [],
@@ -200,7 +163,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             ttags = tree.xpath('//{}'.format('table'))
             fltags = tree.xpath('//{}'.format('float'))
 
-            item_json_dict['ref_entries'] = {}
+            paper_dict['ref_entries'] = {}
 
             for xtag in ftags + ttags + fltags:
                 if xtag.tag in ['figure', 'table']:
@@ -230,12 +193,12 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 xtag.tail = '{{{{{}:{}}}}}'.format(treat_as_type, elem_uuid)
 
                 if treat_as_type == 'figure':
-                    item_json_dict['ref_entries'][str(elem_uuid)] = {
+                    paper_dict['ref_entries'][str(elem_uuid)] = {
                         'caption': ''.join(caption_text.splitlines()),
                         'type': 'figure'}
 
                 elif treat_as_type == 'table':
-                    item_json_dict['ref_entries'][str(elem_uuid)] = {
+                    paper_dict['ref_entries'][str(elem_uuid)] = {
                         'caption': ''.join(caption_text.splitlines()),
                         'type': 'table'}
 
@@ -270,7 +233,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                      new_tail
                 )
 
-                item_json_dict['ref_entries'][str(formula_uuid)] = {
+                paper_dict['ref_entries'][str(formula_uuid)] = {
                     'latex': ''.join(latex_content.splitlines()),
                     'type': 'formula'}
 
@@ -310,7 +273,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             bibitems = tree.xpath('//bibitem')
             bibkey_map = {}
 
-            item_json_dict['bib_entries'] = {}
+            paper_dict['bib_entries'] = {}
             bib_item_counter = 0
 
             for bi in bibitems:
@@ -344,7 +307,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                 local_key = bi.get('id')
                 bibkey_map[local_key] = sha_hash_string
 
-                item_json_dict['bib_entries'][sha_hash_string] = {
+                paper_dict['bib_entries'][sha_hash_string] = {
                     'bib_entry_raw': text
                 }
 
@@ -361,10 +324,10 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
                     else:
                         contained_links_list.append(link)
 
-                item_json_dict['bib_entries'][sha_hash_string][
+                paper_dict['bib_entries'][sha_hash_string][
                     'contained_arXiv_ids'
                 ] = contained_arXiv_ids_list
-                item_json_dict['bib_entries'][sha_hash_string][
+                paper_dict['bib_entries'][sha_hash_string][
                     'contained_links'
                 ] = contained_links_list
 
@@ -399,30 +362,30 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, db_uri=None, write_logs=True):
             tree_str = etree.tostring(tree, encoding='unicode', method='text')
             # tree_str = re.sub('\s+', ' ', tree_str).strip()
 
-            item_json_dict['body_text'] = [{
+            paper_dict['body_text'] = [{
                 'section': '',
                 'text': tree_str,
                 'cite_spans': [],
                 'ref_spans': []
             }]
 
-        # write dictionary to json object (one per 100k items)
-        item_json_dicts_list.append(item_json_dict)
+        # bundle paper dicts for presisting as JSONL (one JSONL per 100k pprs)
+        paper_dicts_list.append(paper_dict)
 
-        # write a chunk of 100k items as .jsonl object, one object per line
+        # persist 100k papers as JSONL, one paper per line
         if file_iterator % 1000000 == 0:
             with jsonlines.open(out_json_path, 'w') as writer:
-                print("Writing JSONL FOR", out_json_path)
-                writer.write_all(item_json_dicts_list)
-            item_json_dicts_list = []
+                print("Writing JSONL for", out_json_path)
+                writer.write_all(paper_dicts_list)
+            paper_dicts_list = []
             jsonl_chunk_counter += 1
 
-    # write last remaining objects
+    # persist last remaining papers
     if not file_iterator % 1000000 == 0:
         with jsonlines.open(out_json_path, 'w') as writer:
-            print("Writing JSONL finally FOR", out_json_path)
-            writer.write_all(item_json_dicts_list)
-        item_json_dicts_list = []
+            print("Writing JSONL finally for", out_json_path)
+            writer.write_all(paper_dicts_list)
+        paper_dicts_list = []
         jsonl_chunk_counter += 1
 
     log(('Citations: {} (not unique)\nUnmatched citations: {}'
