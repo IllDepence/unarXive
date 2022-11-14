@@ -371,6 +371,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
             etree.strip_elements(tree, 'cit', with_tail=False)
 
             # _debug_here(tree=tree)
+            # _write_debug_xml(tree)
 
             # get sections in plain text
             sections = []
@@ -379,9 +380,17 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
                 'div1': 'subsection',
                 'div2': 'subsubsection',
             }
-            for dtag in tree.xpath(
-                '//*[self::div0 or self::div1 or self::div2]'
-            ):
+            # for dtag in tree.xpath(
+            #     '//*[self::div0 or self::div1 or self::div2]'
+            # ):
+            # FIXME: above results in section elements that contain the full
+            # section text (including that of their subsections) followed by
+            # subsection elements that repeat their content
+            # TODO: instead of going by the hierarchical XML structure first
+            # mark *beginnigs* of [[sub]sub]sections *and* paragraphs by
+            # prepending some magic marker, then slice the document in paragraphs
+            # and have each paragraph carry their section information
+            for dtag in tree.xpath('//div0'):
                 heads = dtag.xpath('head')
                 section_title = ''
                 if len(heads) > 0:
