@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import uuid
+import IPython
 from collections import OrderedDict
 from hashlib import sha1
 from lxml import etree
@@ -18,6 +19,19 @@ ARXIV_URL_PATT = re.compile(
      r')?[\d\.]{5,10}(v\d)?$)'),
     re.I
 )
+
+
+def _write_debug_xml(tree):
+    with open('/tmp/debugout.xml', 'wb') as f:
+        f.write(etree.tostring(tree, pretty_print=True))
+
+
+def _debug_here(tree=None, persistent=False):
+    if tree:
+        _write_debug_xml(tree)
+    IPython.embed()
+    if not persistent:
+        sys.exit()
 
 
 def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
@@ -115,25 +129,6 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
                     # print('FAILED {}. skipping'.format(aid))
                     log('\n--- {} ---\n{}\n----------\n'.format(aid, e))
                     continue
-            # tags things that could be treated specially
-            # - <Metadata>
-            #     - <title>
-            #     - <authors><author>
-            # - <head>
-            # - <proof>
-            # - <abstract>
-            # - <maketitle>
-            # - <list> (might be used for larger chunks of text like
-            #           related work)
-            #
-            # tags *NOT* to touch
-            # - <unknown>: can surround whole content
-
-            # figures and tables
-            # # come in the follwoingforms:
-            # # - <figure/table><head>caption text ...
-            # # - <figure/table><caption>caption text ...
-            # # - <float type="figure/table"><caption>caption text ...
 
             # start bulding paper dict
             paper_dict = OrderedDict({
@@ -164,7 +159,28 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
                     'ref_spans': []
                 }]  # not included in parse results
 
-            # get xml tags
+            # parse XML
+
+            # tags things that could be treated specially
+            # - <Metadata>
+            #     - <title>
+            #     - <authors><author>
+            # - <head>
+            # - <proof>
+            # - <abstract>
+            # - <maketitle>
+            # - <list> (might be used for larger chunks of text like
+            #           related work)
+            #
+            # tags *NOT* to touch
+            # - <unknown>: can surround whole content
+
+            # figures and tables
+            # # come in the follwoing forms:
+            # # - <figure/table><head>caption text ...
+            # # - <figure/table><caption>caption text ...
+            # # - <float type="figure/table"><caption>caption text ...
+
             ftags = tree.xpath('//{}'.format('figure'))
             ttags = tree.xpath('//{}'.format('table'))
             fltags = tree.xpath('//{}'.format('float'))
@@ -180,7 +196,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
                         treat_as_type = xtag.get('type')
                     else:
                         continue
-                elem_uuid = uuid.uuid4()  # create uuid for each figure
+                elem_uuid = uuid.uuid4()  # create uuid for each fig/tbl
 
                 caption_text = ''
                 for element in xtag.iter():
@@ -208,11 +224,12 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
                         'caption': ''.join(caption_text.splitlines()),
                         'type': 'table'}
 
-            # delete all figure/table/float tags from xml file
+            # remove all figure/table/float tags from xml file
             etree.strip_elements(tree, 'figure', with_tail=False)
             etree.strip_elements(tree, 'table', with_tail=False)
             etree.strip_elements(tree, 'float', with_tail=False)
 
+            # math notation
             for ftag in tree.xpath('//{}'.format('formula')):
                 # uuid
                 formula_uuid = uuid.uuid4()
@@ -250,19 +267,6 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
             attributes = ['title', 'author', 'date', 'thanks']  # keywords
             for attribute in attributes:
                 etree.strip_elements(tree, attribute, with_tail=False)
-            # mark sections (works in most papers)
-            for dtag in tree.xpath('//{}'.format('div0')):
-                dtag[0].text = '\n<section>{}</section>'.format(dtag[0].text)
-            # mark subsections (works in most papers)
-            for dtag in tree.xpath('//{}'.format('div1')):
-                dtag[0].text = '\n<subsection>{}</subsection>'.format(
-                    dtag[0].text
-                )
-            # mark subsubsections (works in most papers)
-            for dtag in tree.xpath('//{}'.format('div2')):
-                dtag[0].text = '\n<subsubsection>{}</subsubsection>'.format(
-                    dtag[0].text
-                )
             # remove what is most likely noise
             mby_noise = tree.xpath('//unexpected')
             for mn in mby_noise:
@@ -270,6 +274,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
                     mn.getparent().remove(mn)
             # replace non citation references with REF
             for rtag in tree.xpath('//ref[starts-with(@target, "uid")]'):
+                # FIXME: should resolve section refs here
                 if rtag.tail:
                     rtag.tail = '{} {}'.format('REF', rtag.tail)
                 else:
@@ -364,16 +369,43 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
             etree.strip_elements(tree, 'Bibliography', with_tail=False)
             etree.strip_elements(tree, 'bibitem', with_tail=False)
             etree.strip_elements(tree, 'cit', with_tail=False)
-            etree.strip_tags(tree, '*')
-            tree_str = etree.tostring(tree, encoding='unicode', method='text')
-            # tree_str = re.sub('\s+', ' ', tree_str).strip()
 
-            paper_dict['body_text'] = [{
-                'section': '',
-                'text': tree_str,
-                'cite_spans': [],
-                'ref_spans': []
-            }]
+            # _debug_here(tree=tree)
+
+            # get sections in plain text
+            sections = []
+            tag_name_to_type = {
+                'div0': 'section',
+                'div1': 'subsection',
+                'div2': 'subsubsection',
+            }
+            for dtag in tree.xpath(
+                '//*[self::div0 or self::div1 or self::div2]'
+            ):
+                heads = dtag.xpath('head')
+                section_title = ''
+                if len(heads) > 0:
+                    section_title = heads[0].text
+                    dtag.remove(heads[0])
+                section_number = dtag.attrib.get('id-text', -1)
+                section_type = tag_name_to_type[dtag.tag]
+                section_text = etree.tostring(
+                    dtag,
+                    encoding='unicode',
+                    method='text'
+                )
+                # section_text = re.sub('\s+', ' ', section_text).strip()
+                section_dict = OrderedDict({
+                    'section': section_title,
+                    'number': section_number,
+                    'type': section_type,
+                    'text': section_text,
+                    'cite_spans': [],
+                    'ref_spans': []
+                })
+                sections.append(section_dict)
+
+            paper_dict['body_text'] = sections
 
         # bundle paper dicts for presisting as JSONL (one JSONL per 100k pprs)
         paper_dicts_list.append(paper_dict)
