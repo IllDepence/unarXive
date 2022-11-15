@@ -34,7 +34,7 @@ def _process_section_head(sec_node, head_node):
     }
     curr_sec = {
         'head': head_node.text,
-        'num': sec_node.attrib.get('id-text', -1),
+        'num': sec_node.attrib.get('id-text', '-1'),
         'type': tag_name_to_type[sec_node.tag]
     }
     return curr_sec
@@ -46,16 +46,39 @@ def _process_paragraph(p_node, curr_sec):
         encoding='unicode',
         method='text'
     )
+    cite_spans, ref_spans = _get_local_refs(
+        par_text
+    )
     # par_text = re.sub('\s+', ' ', par_text).strip()
     par = OrderedDict({
         'section': curr_sec['head'],
         'sec_number': curr_sec['num'],
         'sec_type': curr_sec['type'],
         'text': par_text,
-        'cite_spans': [],
-        'ref_spans': []
+        'cite_spans': cite_spans,
+        'ref_spans': ref_spans
     })
     return par
+
+
+def _get_local_refs(par_text):
+    marker_patt = re.compile(
+        r'{{(cite|formula|figure|table|float):([0-9a-z-]+)}}'
+    )
+    cite_spans = []
+    ref_spans = []
+    for m in marker_patt.finditer(par_text):
+        ref = {
+            'start': m.start(),
+            'end': m.end(),
+            'text': m.group(0),
+            'ref_id': m.group(2)
+        }
+        if m.group(1) == 'cite':
+            cite_spans.append(ref)
+        else:
+            ref_spans.append(ref)
+    return cite_spans, ref_spans
 
 
 def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
