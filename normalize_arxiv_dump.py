@@ -18,6 +18,8 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from hashlib import sha1
+
 
 MAIN_TEX_PATT = re.compile(r'(\\begin\s*\{\s*document\s*\})', re.I)
 # ^ with capturing parentheses so that the pattern can be used for splitting
@@ -28,12 +30,14 @@ NON_TEXT_PATT = re.compile(r'^\.(pdf|eps|jpg|png|gif)$', re.I)
 BBL_SIGN = '\\bibitem'
 # natbib fix
 PRE_FIX_NATBIB = True
-NATBIB_PATT = re.compile((r'\\cite(t|p|alt|alp|author|year|yearpar)\s*?\*?\s*?'
-                           '(\[[^\]]*?\]\s*?)*?\s*?\*?\s*?\{([^\}]+?)\}'),
-                         re.I)
+NATBIB_PATT = re.compile(
+    (r'\\cite(t|p|alt|alp|author|year|yearpar)\s*?\*?\s*?'
+     r'(\[[^\]]*?\]\s*?)*?\s*?\*?\s*?\{([^\}]+?)\}'),
+    re.I
+)
 # bibitem option fix
 PRE_FIX_BIBOPT = True
-BIBOPT_PATT = re.compile(r'\\bibitem\s*?\[[^]]*?\]', re.I|re.M)
+BIBOPT_PATT = re.compile(r'\\bibitem\s*?\[[^]]*?\]', re.I | re.M)
 
 # ↑ above two solve most tralics problems; except for mnras style bibitems
 # (https://ctan.org/pkg/mnras)
@@ -91,29 +95,41 @@ def read_gzipped_file(path):
 def remove_math(latex_str):
     parts = re.split(MAIN_TEX_PATT, latex_str, maxsplit=1)
     for patt in FILTER_PATTS:
-         parts[2] = re.sub(patt, '', parts[2])
+        parts[2] = re.sub(patt, '', parts[2])
     return ''.join(parts)
 
 
-def normalize(IN_DIR, OUT_DIR, write_logs=True):
+def _source_file_hash(fp):
+    source_file_hasher = sha1()
+    with open(fp, 'rb') as source_file:
+        buf = source_file.read()
+        source_file_hasher.update(buf)
+        source_file_hash = str(source_file_hasher.hexdigest())
+    return source_file_hash
+
+
+def normalize(in_dir, out_dir, write_logs=True):
     def log(msg):
         if write_logs:
-            with open(os.path.join(OUT_DIR, 'log.txt'), 'a') as f:
+            with open(os.path.join(out_dir, 'log.txt'), 'a') as f:
                 f.write('{}\n'.format(msg))
 
-    if not os.path.isdir(IN_DIR):
+    if not os.path.isdir(in_dir):
         print('dump directory does not exist')
         return False
 
-    if not os.path.isdir(OUT_DIR):
-        os.makedirs(OUT_DIR)
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
 
-    for fn in os.listdir(IN_DIR):
-        path = os.path.join(IN_DIR, fn)
+    source_file_hashes = dict()
+
+    for fn in os.listdir(in_dir):
+        path = os.path.join(in_dir, fn)
         aid, ext = os.path.splitext(fn)
+        source_file_hashes[aid] = _source_file_hash(path)
         if PDF_EXT_PATT.match(ext):
             # copy over pdf file as is
-            dest = os.path.join(OUT_DIR, fn)
+            dest = os.path.join(out_dir, fn)
             shutil.copyfile(path, dest)
         elif GZ_EXT_PATT.match(ext):
             if tarfile.is_tarfile(path):
@@ -176,7 +192,7 @@ def normalize(IN_DIR, OUT_DIR, write_logs=True):
                     out = open(tmp_dest, mode='w')
                     if write_logs:
                         err = open(
-                            os.path.join(OUT_DIR, 'log_latexpand.txt'), 'a'
+                            os.path.join(out_dir, 'log_latexpand.txt'), 'a'
                             )
                     else:
                         err = open(os.devnull, 'w')
@@ -195,7 +211,7 @@ def normalize(IN_DIR, OUT_DIR, write_logs=True):
                         cntnt = BIBOPT_PATT.sub(r'\\bibitem', cntnt)
                     if PRE_FILTER_MATH:
                         cntnt = remove_math(cntnt)
-                    dest = os.path.join(OUT_DIR, new_tex_fn)
+                    dest = os.path.join(out_dir, new_tex_fn)
                     with open(dest, mode='w', encoding='utf-8') as f:
                         f.write(cntnt)
             else:
@@ -213,12 +229,13 @@ def normalize(IN_DIR, OUT_DIR, write_logs=True):
                     cntnt = BIBOPT_PATT.sub('\\bibitem', cntnt)
                 if PRE_FILTER_MATH:
                     cntnt = remove_math(cntnt)
-                dest = os.path.join(OUT_DIR, new_fn)
+                dest = os.path.join(out_dir, new_fn)
                 with open(dest, mode='w', encoding='utf-8') as f:
                     f.write(cntnt)
         else:
             log('unexpected file {} in dump directory'.format(fn))
-    return True
+
+    return source_file_hashes
 
 
 if __name__ == '__main__':
@@ -226,8 +243,8 @@ if __name__ == '__main__':
         print(('usage: python3 nomalize_arxiv_dump.py </path/to/dump/dir> </pa'
                'th/to/out/dir>'))
         sys.exit()
-    IN_DIR = sys.argv[1]
-    OUT_DIR = sys.argv[2]
-    ret = normalize(IN_DIR, OUT_DIR)
+    in_dir = sys.argv[1]
+    out_dir = sys.argv[2]
+    ret = normalize(in_dir, out_dir)
     if not ret:
         sys.exit()

@@ -1,6 +1,8 @@
 """ Normalize and parse.
 """
 
+import json
+import jsonlines
 import os
 import shutil
 import sys
@@ -20,6 +22,15 @@ def prepare(in_dir, out_dir, write_logs=False):
     if '.tar' not in ext_sample:
         print('input directory doesn\'t seem to contain TAR archives')
         return False
+
+    # taken out due to exceedingly high performance loss
+    # TODO: try out year+month specific metadata access, mby using a database
+    # with indices on year/month/aid columns instead of in-memory Python object
+    # # load arXiv metadata
+    arxiv_meta = {}
+    # with jsonlines.open('arxiv-metadata-oai-snapshot_221115.jsonl') as readr:
+    #     for ppr_meta in readr:
+    #         arxiv_meta[ppr_meta['id']] = ppr_meta
 
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
@@ -100,9 +111,19 @@ def prepare(in_dir, out_dir, write_logs=False):
                 shutil.move(gz_path_tmp, gz_path_new)
             os.rmdir(containing_path)
             # adjust in_dir
-            normalize(tmp_dir_gz, tmp_dir_norm, write_logs=write_logs)
-            parse(tmp_dir_norm, out_dir, INCREMENTAL=False,
-                  write_logs=write_logs)
+            source_file_hashes = normalize(
+                tmp_dir_gz,
+                tmp_dir_norm,
+                write_logs=write_logs
+            )
+            parse(
+                tmp_dir_norm,
+                out_dir,
+                source_file_hashes=source_file_hashes,
+                arxiv_meta=arxiv_meta,
+                incremental=False,
+                write_logs=write_logs
+            )
         with open(done_log_path, 'a') as f:
             f.write('{}\n'.format(tar_fn))
     print('{} files'.format(num_files_total))

@@ -81,18 +81,21 @@ def _get_local_refs(par_text):
     return cite_spans, ref_spans
 
 
-def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
+def parse(
+    in_dir, out_dir, source_file_hashes, arxiv_meta, incremental,
+    write_logs=True
+):
     def log(msg):
         if write_logs:
-            with open(os.path.join(OUT_DIR, 'log.txt'), 'a') as f:
+            with open(os.path.join(out_dir, 'log.txt'), 'a') as f:
                 f.write('{}\n'.format(msg))
 
-    if not os.path.isdir(IN_DIR):
+    if not os.path.isdir(in_dir):
         print('input directory does not exist')
         return False
 
-    if not os.path.isdir(OUT_DIR):
-        os.makedirs(OUT_DIR)
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
 
     num_citations = 0
     num_citations_notfound = 0
@@ -101,23 +104,15 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
     jsonl_chunk_counter = 1
 
     # iterate over each file in input directory
-    for fn in os.listdir(IN_DIR):
-        path = os.path.join(IN_DIR, fn)  # absolute path to current file
-        print("current file:", path)
+    for fn in os.listdir(in_dir):
+        path = os.path.join(in_dir, fn)  # absolute path to current file
+        print('current file:', path)
         aid, ext = os.path.splitext(fn)  # get file extension
         # make txt file for each file
-        aid_chunk = aid + "_" + str(jsonl_chunk_counter)  # FIXME: not used
-        out_txt_path = os.path.join(OUT_DIR, '{}.txt'.format(aid))  # was aid
         out_json_path = os.path.join(
-            OUT_DIR,
+            out_dir,
             '{}.jsonl'.format(str('chunk_'+str(jsonl_chunk_counter)))
         )
-
-        # skip already existing files
-        if INCREMENTAL and os.path.isfile(out_txt_path):  # is usually false
-            # print('{} already in output directory, skipping'.format(aid))
-            continue
-        # print(aid)
         if PDF_EXT_PATT.match(ext):  # Skip pdf files
             log('skipping file {} (PDF)'.format(fn))
             continue
@@ -136,7 +131,7 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
                             path]
 
             if write_logs:
-                out = open(os.path.join(OUT_DIR, 'log_tralics.txt'), 'a')
+                out = open(os.path.join(out_dir, 'log_tralics.txt'), 'a')
             else:
                 out = open(os.devnull, 'w')
             err = open(os.path.join(tmp_dir_path, 'tralics_out.txt'), mode='w')
@@ -154,11 +149,6 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
 
             # get mathless plain text from latexml output
             parser = etree.XMLParser()
-
-            # test-wise: print content of xml
-            # with open(tmp_xml_path,'r') as testxml:
-            #     print("#################################################################################################################################")
-            #     print(testxml.read())
 
             # check if smth went wrong with parsing latex to temporary xml file
             if not os.path.isfile(tmp_xml_path):
@@ -182,29 +172,27 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
                 'paper_id': aid,
                 '_pdf_hash': None,
                 '_source_hash': None,
+                'metadata': None,
                 'abstract': [],
                 'body_text': [],
                 'bib_entries': {},
                 'ref_entries': {}
             })
 
-            source_file_hasher = sha1()
-            with open(path, 'rb') as source_file:
-                buf = source_file.read()
-                source_file_hasher.update(buf)
-                # FIXME: determine and persist hash of input source file during
-                #        normalization of LaTeX (normalize_arxiv_dump.py)
-                #        and simply read and store it here afterwards
-                source_file_hash = str(source_file_hasher.hexdigest())
+            paper_dict['_source_hash'] = source_file_hashes[aid]
 
-            paper_dict['_source_hash'] = source_file_hash
-
-            paper_dict['abstract'] = [{
-                    'section': 'Abstract''',
-                    'text': '',  # Abstract text goes here
-                    'cite_spans': [],
-                    'ref_spans': []
-                }]  # not included in parse results
+            # aid_versionless = aid.split('v')[0]
+            # metadata = arxiv_meta.get(aid_versionless, {})
+            # paper_dict['metadata'] = metadata
+            # abstract_text = metadata.get('abstract', '')
+            abstract_text = ''  # TODO
+            abstract = {
+                'section': 'Abstract',
+                'text': abstract_text,
+                'cite_spans': [],
+                'ref_spans': []
+            }
+            paper_dict['abstract'] = abstract
 
             # parse XML
 
@@ -521,8 +509,8 @@ if __name__ == '__main__':
         print(('usage: python3 parse_latex_tralics.py </path/to/in/dir> </path'
                '/to/out/dir>'))
         sys.exit()
-    IN_DIR = sys.argv[1]
-    OUT_DIR = sys.argv[2]
-    ret = parse(IN_DIR, OUT_DIR, INCREMENTAL=False)
+    in_dir = sys.argv[1]
+    out_dir = sys.argv[2]
+    ret = parse(in_dir, out_dir, incremental=False)
     if not ret:
         sys.exit()
