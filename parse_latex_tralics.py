@@ -26,12 +26,36 @@ def _write_debug_xml(tree):
         f.write(etree.tostring(tree, pretty_print=True))
 
 
-def _debug_here(tree=None, persistent=False):
-    if tree:
-        _write_debug_xml(tree)
-    IPython.embed()
-    if not persistent:
-        sys.exit()
+def _process_section_head(sec_node, head_node):
+    tag_name_to_type = {
+        'div0': 'section',
+        'div1': 'subsection',
+        'div2': 'subsubsection',
+    }
+    curr_sec = {
+        'head': head_node.text,
+        'num': sec_node.attrib.get('id-text', -1),
+        'type': tag_name_to_type[sec_node.tag]
+    }
+    return curr_sec
+
+
+def _process_paragraph(p_node, curr_sec):
+    par_text = etree.tostring(
+        p_node,
+        encoding='unicode',
+        method='text'
+    )
+    # par_text = re.sub('\s+', ' ', par_text).strip()
+    par = OrderedDict({
+        'section': curr_sec['head'],
+        'sec_number': curr_sec['num'],
+        'sec_type': curr_sec['type'],
+        'text': par_text,
+        'cite_spans': [],
+        'ref_spans': []
+    })
+    return par
 
 
 def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
@@ -370,51 +394,80 @@ def parse(IN_DIR, OUT_DIR, INCREMENTAL, write_logs=True):
             etree.strip_elements(tree, 'bibitem', with_tail=False)
             etree.strip_elements(tree, 'cit', with_tail=False)
 
-            # _debug_here(tree=tree)
             # _write_debug_xml(tree)
+            # IPython.embed()
+            # sys.exit()
 
-            # get sections in plain text
-            sections = []
-            tag_name_to_type = {
-                'div0': 'section',
-                'div1': 'subsection',
-                'div2': 'subsubsection',
+            # process document structure
+            paragraphs = []
+            curr_sec = {
+                'head': '',
+                'num': '-1',
+                'type': ''
             }
-            # for dtag in tree.xpath(
-            #     '//*[self::div0 or self::div1 or self::div2]'
-            # ):
-            # FIXME: above results in section elements that contain the full
-            # section text (including that of their subsections) followed by
-            # subsection elements that repeat their content
-            # TODO: instead of going by the hierarchical XML structure first
-            # mark *beginnigs* of [[sub]sub]sections *and* paragraphs by
-            # prepending some magic marker, then slice the document in paragraphs
-            # and have each paragraph carry their section information
-            for dtag in tree.xpath('//div0'):
-                heads = dtag.xpath('head')
-                section_title = ''
-                if len(heads) > 0:
-                    section_title = heads[0].text
-                    dtag.remove(heads[0])
-                section_number = dtag.attrib.get('id-text', -1)
-                section_type = tag_name_to_type[dtag.tag]
-                section_text = etree.tostring(
-                    dtag,
-                    encoding='unicode',
-                    method='text'
-                )
-                # section_text = re.sub('\s+', ' ', section_text).strip()
-                section_dict = OrderedDict({
-                    'section': section_title,
-                    'number': section_number,
-                    'type': section_type,
-                    'text': section_text,
-                    'cite_spans': [],
-                    'ref_spans': []
-                })
-                sections.append(section_dict)
+            # div0 tag can appear on different levels of the XML hierarchy,
+            # such as /std/div0 or /unknown/frontmatter/div0
+            # we therefore take div0s from anywhere and assume they always
+            # are the lowest level containers of the main textual contents
+            top_level_sections = tree.xpath('//div0')
+            if len(top_level_sections) == 0:
+                # give up on sections and just use paragraphs
+                paragraphs = [
+                    _process_paragraph(p, curr_sec)
+                    for p in tree.xpath('//p')
+                ]
+            for sec in top_level_sections:
+                for sec_child in sec.getchildren():
+                    # contents of section
+                    if sec_child.tag == 'head':
+                        # head
+                        curr_sec = _process_section_head(
+                            sec,
+                            sec_child
+                        )
+                    elif sec_child.tag == 'p':
+                        # text
+                        par = _process_paragraph(
+                            sec_child,
+                            curr_sec
+                        )
+                        paragraphs.append(par)
+                    elif sec_child.tag == 'div1':
+                        # subsections
+                        for suse_child in sec_child.getchildren():
+                            # contents of subsection
+                            if suse_child.tag == 'head':
+                                # head
+                                curr_sec = _process_section_head(
+                                    sec_child,
+                                    suse_child
+                                )
+                            elif suse_child.tag == 'p':
+                                # text
+                                par = _process_paragraph(
+                                    suse_child,
+                                    curr_sec
+                                )
+                                paragraphs.append(par)
+                            elif suse_child.tag == 'div2':
+                                # subsubsections
+                                for sususe_child in suse_child.getchildren():
+                                    # contents of subsection
+                                    if sususe_child.tag == 'head':
+                                        # head
+                                        curr_sec = _process_section_head(
+                                            suse_child,
+                                            sususe_child
+                                        )
+                                    elif sususe_child.tag == 'p':
+                                        # text
+                                        par = _process_paragraph(
+                                            sususe_child,
+                                            curr_sec
+                                        )
+                                        paragraphs.append(par)
 
-            paper_dict['body_text'] = sections
+            paper_dict['body_text'] = paragraphs
 
         # bundle paper dicts for presisting as JSONL (one JSONL per 100k pprs)
         paper_dicts_list.append(paper_dict)
