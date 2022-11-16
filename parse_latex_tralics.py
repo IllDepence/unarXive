@@ -9,7 +9,7 @@ import sys
 import tempfile
 import uuid
 import IPython
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from hashlib import sha1
 from lxml import etree
 
@@ -26,12 +26,43 @@ def _write_debug_xml(tree):
         f.write(etree.tostring(tree, pretty_print=True))
 
 
+def _process_section_node(sec_node, curr_sec):
+    """ Recursive function for getting text content of
+        a section.
+    """
+
+    text_elemnts = []
+    skip_tags = [
+        'clearpage',
+        'newpage',
+        'tableofcontents',
+        'vfill'
+    ]
+    for child_node in sec_node.getchildren():
+        if child_node.tag in skip_tags:
+            continue
+        elif child_node.tag == 'head':
+            # head
+            curr_sec = _process_section_head(
+                sec_node,
+                child_node
+            )
+        elif child_node.tag[:3] == 'div':
+            text_elemnts.extend(
+                _process_section_node(child_node, curr_sec)
+            )
+        else:
+            text_elem = _process_content_node(child_node, curr_sec)
+            if len(text_elem['text'].strip()) > 0:
+                text_elemnts.append(text_elem)
+    return text_elemnts
+
+
 def _process_section_head(sec_node, head_node):
-    tag_name_to_type = {
-        'div0': 'section',
-        'div1': 'subsection',
-        'div2': 'subsubsection',
-    }
+    tag_name_to_type = defaultdict(str)
+    tag_name_to_type['div0'] = 'section'
+    tag_name_to_type['div1'] = 'subsection'
+    tag_name_to_type['div2'] = 'subsubsection'
     curr_sec = {
         'head': head_node.text,
         'num': sec_node.attrib.get('id-text', '-1'),
@@ -40,9 +71,16 @@ def _process_section_head(sec_node, head_node):
     return curr_sec
 
 
-def _process_paragraph(p_node, curr_sec):
+def _content_type_from_tag(tag):
+    if tag == 'p':
+        return 'paragraph'
+    else:
+        return tag
+
+
+def _process_content_node(c_node, curr_sec):
     par_text = etree.tostring(
-        p_node,
+        c_node,
         encoding='unicode',
         method='text'
     )
@@ -54,6 +92,7 @@ def _process_paragraph(p_node, curr_sec):
         'section': curr_sec['head'],
         'sec_number': curr_sec['num'],
         'sec_type': curr_sec['type'],
+        'content_type': _content_type_from_tag(c_node.tag),
         'text': par_text,
         'cite_spans': cite_spans,
         'ref_spans': ref_spans
@@ -106,7 +145,7 @@ def parse(
     # iterate over each file in input directory
     for fn in os.listdir(in_dir):
         path = os.path.join(in_dir, fn)  # absolute path to current file
-        print('current file:', path)
+        # print('current file:', path)
         aid, ext = os.path.splitext(fn)  # get file extension
         # make txt file for each file
         out_json_path = os.path.join(
@@ -159,7 +198,6 @@ def parse(
             with open(tmp_xml_path) as f:
                 try:
                     tree = etree.parse(f, parser)  # get tree of XML hierarchy
-                    print("tree worked")
                     file_iterator += 1
                 # catch exception to faulty XML file
                 except (etree.XMLSyntaxError, UnicodeDecodeError) as e:
@@ -406,8 +444,6 @@ def parse(
             etree.strip_elements(tree, 'cit', with_tail=False)
 
             # _write_debug_xml(tree)
-            # IPython.embed()
-            # sys.exit()
 
             # process document structure
             paragraphs = []
@@ -422,61 +458,20 @@ def parse(
             # are the lowest level containers of the main textual contents
             top_level_sections = tree.xpath('//div0')
             if len(top_level_sections) == 0:
-                # give up on sections and just use paragraphs
+                # if there are no div0 tags, we give up on sections and just
+                # use paragraphs, lists, proofs, and listings and hope we
+                # cover all content with those
                 paragraphs = [
-                    _process_paragraph(p, curr_sec)
-                    for p in tree.xpath('//p')
+                    _process_content_node(p, curr_sec)
+                    for p in tree.xpath((
+                        '//*[self::p or self::list or self::proof or '
+                        'self::listing]'
+                    ))
                 ]
             for sec in top_level_sections:
-                for sec_child in sec.getchildren():
-                    # contents of section
-                    if sec_child.tag == 'head':
-                        # head
-                        curr_sec = _process_section_head(
-                            sec,
-                            sec_child
-                        )
-                    elif sec_child.tag == 'p':
-                        # text
-                        par = _process_paragraph(
-                            sec_child,
-                            curr_sec
-                        )
-                        paragraphs.append(par)
-                    elif sec_child.tag == 'div1':
-                        # subsections
-                        for suse_child in sec_child.getchildren():
-                            # contents of subsection
-                            if suse_child.tag == 'head':
-                                # head
-                                curr_sec = _process_section_head(
-                                    sec_child,
-                                    suse_child
-                                )
-                            elif suse_child.tag == 'p':
-                                # text
-                                par = _process_paragraph(
-                                    suse_child,
-                                    curr_sec
-                                )
-                                paragraphs.append(par)
-                            elif suse_child.tag == 'div2':
-                                # subsubsections
-                                for sususe_child in suse_child.getchildren():
-                                    # contents of subsection
-                                    if sususe_child.tag == 'head':
-                                        # head
-                                        curr_sec = _process_section_head(
-                                            suse_child,
-                                            sususe_child
-                                        )
-                                    elif sususe_child.tag == 'p':
-                                        # text
-                                        par = _process_paragraph(
-                                            sususe_child,
-                                            curr_sec
-                                        )
-                                        paragraphs.append(par)
+                paragraphs.extend(
+                    _process_section_node(sec, curr_sec)
+                )
 
             paper_dict['body_text'] = paragraphs
 
