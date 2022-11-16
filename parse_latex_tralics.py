@@ -408,12 +408,12 @@ def parse(
                         try:
                             location_offset_start = text.index(id_part)
                             location_offset_end = text.index(id_part) + len(id_part)
-                            print(f"### arxiv ID {id_part} in text gefunden ! ###")
+                            #print(f"### arxiv ID {id_part} in text gefunden ! ###")
                         except ValueError as e:
-                            print(f"## value error: {e}\n{id_part} \n## not found in \n{text}")
-                            print("## Setting offsets to None..")
-                            print("## Printing XML (item probably in tag but not in pretty text)")
-                            print(etree.tostring(containing_p, encoding='unicode', method='xml'))
+                            print(f"## value error: {e}\n{id_part} \n## not found in paper {aid} in \n{text}")
+                            #print("## Setting offsets to None..")
+                            #print("## Printing XML (item probably in tag but not in pretty text)")
+                            #print(etree.tostring(containing_p, encoding='unicode', method='xml'))
                             location_offset_start = None
                             location_offset_end = None
 
@@ -424,12 +424,12 @@ def parse(
                         try:
                             location_offset_start = text.index(link)
                             location_offset_end = text.index(link) + len(link)
-                            print(f"### link {link} ID in text gefunden! ###")
+                            #print(f"### link {link} ID in text gefunden! ###")
                         except ValueError as e:
-                            print(f"## value error: {e}\n{link} \n## not found in \n{text}")
-                            print("## Setting offsets to None..")
-                            print("## Printing XML (item probably in tag but not in pretty text)")
-                            print(etree.tostring(containing_p, encoding='unicode', method='xml'))
+                            print(f"## value error: {e}\n{link} \n## not found in paper {aid} in \n{text}")
+                            #print("## Setting offsets to None..")
+                            #print("## Printing XML (item probably in tag but not in pretty text)")
+                            #print(etree.tostring(containing_p, encoding='unicode', method='xml'))
                             location_offset_start = None
                             location_offset_end = None
 
