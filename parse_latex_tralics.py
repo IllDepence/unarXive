@@ -440,7 +440,7 @@ def parse(
                             location_offset_start = None
                             location_offset_end = None
 
-                        link_item_local_temp_dict = {'link': link, 'text': link_text, 'start': location_offset_start,
+                        link_item_local_temp_dict = {'url': link, 'text': link_text, 'start': location_offset_start,
                                                      'end': location_offset_end}
                         contained_links_list.append(link_item_local_temp_dict)
 
