@@ -205,7 +205,7 @@ def parse(
                     log('\n--- {} ---\n{}\n----------\n'.format(aid, e))
                     continue
 
-            # start bulding paper dict
+            # start building paper dict
             paper_dict = OrderedDict({
                 'paper_id': aid,
                 '_pdf_hash': None,
@@ -415,9 +415,13 @@ def parse(
                             try:
                                 location_offset_start = text.index(link_text)
                                 location_offset_end = text.index(link_text) + len(link_text)
+
+                            # treat error if link text is not in bib entry text
                             except ValueError as e:
                                 location_offset_start = None
                                 location_offset_end = None
+
+                        # if there are links included in source file without corresponding visible text
                         else:
                             link_text = None
                             location_offset_start = None
@@ -435,6 +439,7 @@ def parse(
                             except ValueError as e:
                                 location_offset_start = None
                                 location_offset_end = None
+
                         else:
                             link_text = None
                             location_offset_start = None
