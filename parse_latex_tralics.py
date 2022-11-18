@@ -358,7 +358,6 @@ def parse(
             bibkey_map = {}
 
             paper_dict['bib_entries'] = {}
-            bib_item_counter = 0
 
             for bi in bibitems:
                 containing_p = bi.getparent()
@@ -401,41 +400,48 @@ def parse(
 
                 for xref in containing_p.findall('xref'):
                     link = xref.get('url')
+                    link_text = etree.tostring(
+                        xref,
+                        encoding='unicode',
+                        method='text'
+                    )
+                    # clean link plain text for matching with bib entry plain text
+                    link_text = re.sub(r'\s+', ' ', link_text).strip()
+
                     match = ARXIV_URL_PATT.search(link)
                     if match:
                         id_part = match.group(1)
-
-                        try:
-                            location_offset_start = text.index(id_part)
-                            location_offset_end = text.index(id_part) + len(id_part)
-                            # print(f"### arxiv ID {id_part} in text gefunden ! ###")
-                        except ValueError as e:
-                            print(f"## value error: {e}\n{id_part} \n## not found in paper {aid} in \n{text}")
-                            # print("## Setting offsets to None..")
-                            # print("## Printing XML (item probably in tag but not in pretty text)")
-                            # print(etree.tostring(containing_p, encoding='unicode', method='xml'))
+                        if len(link_text) != 0:
+                            try:
+                                location_offset_start = text.index(link_text)
+                                location_offset_end = text.index(link_text) + len(link_text)
+                            except ValueError as e:
+                                location_offset_start = None
+                                location_offset_end = None
+                        else:
+                            link_text = None
                             location_offset_start = None
                             location_offset_end = None
 
-                        arXiv_item_local_temp_dict = {'id': id_part, 'start_offset': location_offset_start,
-                                                      'end_offset': location_offset_end}
+                        arXiv_item_local_temp_dict = {'id': id_part, 'text': link_text, 'start': location_offset_start,
+                                                      'end': location_offset_end}
                         contained_arXiv_ids_list.append(arXiv_item_local_temp_dict)
 
                     else:
-                        try:
-                            location_offset_start = text.index(link)
-                            location_offset_end = text.index(link) + len(link)
-                            # print(f"### link {link} ID in text gefunden! ###")
-                        except ValueError as e:
-                            print(f"## value error: {e}\n{link} \n## not found in paper {aid} in \n{text}")
-                            # print("## Setting offsets to None..")
-                            # print("## Printing XML (item probably in tag but not in pretty text)")
-                            # print(etree.tostring(containing_p, encoding='unicode', method='xml'))
+                        if len(link_text) != 0:
+                            try:
+                                location_offset_start = text.index(link_text)
+                                location_offset_end = text.index(link_text) + len(link_text)
+                            except ValueError as e:
+                                location_offset_start = None
+                                location_offset_end = None
+                        else:
+                            link_text = None
                             location_offset_start = None
                             location_offset_end = None
 
-                        link_item_local_temp_dict = {'link': link, 'start_offset': location_offset_start,
-                                                     'end_offset': location_offset_end}
+                        link_item_local_temp_dict = {'link': link, 'text': link_text, 'start': location_offset_start,
+                                                     'end': location_offset_end}
                         contained_links_list.append(link_item_local_temp_dict)
 
                 paper_dict['bib_entries'][sha_hash_string][
@@ -445,7 +451,6 @@ def parse(
                     'contained_links'
                 ] = contained_links_list
 
-                bib_item_counter += 1
 
             citations = tree.xpath('//cit')
             for cit in citations:
