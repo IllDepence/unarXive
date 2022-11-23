@@ -1,5 +1,6 @@
-chardet==3.0.4
-lxml>=4.2.5
-python-magic==0.4.15
-requests==2.20.0
-unidecode==1.0.23
+chardet
+lxml
+python-magic
+requests
+unidecode
+tqdm

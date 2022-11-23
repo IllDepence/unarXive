@@ -1,8 +1,6 @@
 """ Normalize and parse.
 """
 
-import json
-import jsonlines
 import os
 import shutil
 import sys
@@ -13,7 +11,7 @@ from normalize_arxiv_dump import normalize
 from parse_latex_tralics import parse
 
 
-def prepare(in_dir, out_dir, write_logs=False):
+def prepare(in_dir, out_dir, meta_db, write_logs=False):
     if not os.path.isdir(in_dir):
         print('input directory does not exist')
         return False
@@ -22,15 +20,6 @@ def prepare(in_dir, out_dir, write_logs=False):
     if '.tar' not in ext_sample:
         print('input directory doesn\'t seem to contain TAR archives')
         return False
-
-    # taken out due to exceedingly high performance loss
-    # TODO: try out year+month specific metadata access, mby using a database
-    # with indices on year/month/aid columns instead of in-memory Python object
-    # # load arXiv metadata
-    arxiv_meta = {}
-    # with jsonlines.open('arxiv-metadata-oai-snapshot_221115.jsonl') as readr:
-    #     for ppr_meta in readr:
-    #         arxiv_meta[ppr_meta['id']] = ppr_meta
 
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
@@ -111,7 +100,7 @@ def prepare(in_dir, out_dir, write_logs=False):
                 shutil.move(gz_path_tmp, gz_path_new)
             os.rmdir(containing_path)
             # adjust in_dir
-            source_file_hashes = normalize(
+            source_file_info = normalize(
                 tmp_dir_gz,
                 tmp_dir_norm,
                 write_logs=write_logs
@@ -119,8 +108,9 @@ def prepare(in_dir, out_dir, write_logs=False):
             parse(
                 tmp_dir_norm,
                 out_dir,
-                source_file_hashes=source_file_hashes,
-                arxiv_meta=arxiv_meta,
+                tar_fn,
+                source_file_info,
+                meta_db,
                 incremental=False,
                 write_logs=write_logs
             )
@@ -131,9 +121,13 @@ def prepare(in_dir, out_dir, write_logs=False):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) not in [3, 4]:
-        print('usage: python3 prepare.py </path/to/in/dir> </path/to/out/dir>')
+    if len(sys.argv) != 4:
+        print((
+            'usage: python3 prepare.py </path/to/in/dir> </path/to/out/dir> '
+            '</path/to/metadata.db>'
+        ))
         sys.exit()
     in_dir = sys.argv[1]
     out_dir_dir = sys.argv[2]
-    ret = prepare(in_dir, out_dir_dir, write_logs=True)
+    meta_db = sys.argv[3]
+    ret = prepare(in_dir, out_dir_dir, meta_db, write_logs=True)

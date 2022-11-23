@@ -1,9 +1,10 @@
 """ Convert LaTeX files to S2ORC like JSONL output
 """
 
-import jsonlines
+import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -19,6 +20,7 @@ ARXIV_URL_PATT = re.compile(
      r')?[\d\.]{5,10}(v\d)?$)'),
     re.I
 )
+ARXIV_ID_PATT = re.compile(r'^(.*\/)?(\d\d)(\d\d).*$')
 
 
 def _write_debug_xml(tree):
@@ -120,8 +122,31 @@ def _get_local_refs(par_text):
     return cite_spans, ref_spans
 
 
+def _get_paper_metadata(meta_db_cur, aid):
+    """ Retrieve metadata from the given DB cursor.
+    """
+
+    aid_m = ARXIV_ID_PATT.match(aid)
+    assert aid_m is not None
+    aid = aid_m.group(0)
+    curr_ppr_y = int(aid_m.group(2))
+    curr_ppr_m = int(aid_m.group(3))
+    meta_db_cur.execute(
+        '''
+        select json from paper where year=? and month=? and aid=?
+        ''',
+        (curr_ppr_y, curr_ppr_m, aid)
+    )
+    metadata_tup = meta_db_cur.fetchone()
+    try:
+        metadata = json.loads(metadata_tup[0])
+    except (TypeError, IndexError) as e:
+        return {}
+    return metadata
+
+
 def parse(
-        in_dir, out_dir, source_file_hashes, arxiv_meta, incremental,
+        in_dir, out_dir, tar_fn, source_file_info, meta_db_fp, incremental,
         write_logs=True
 ):
     def log(msg):
@@ -136,22 +161,20 @@ def parse(
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
 
+    # prepare metadata DB connection
+    meta_db_conn = sqlite3.connect(meta_db_fp)
+    meta_db_cur = meta_db_conn.cursor()
+
     num_citations = 0
     num_citations_notfound = 0
     file_iterator = 0
     paper_dicts_list = []
-    jsonl_chunk_counter = 1
 
     # iterate over each file in input directory
     for fn in os.listdir(in_dir):
         path = os.path.join(in_dir, fn)  # absolute path to current file
         # print('current file:', path)
         aid, ext = os.path.splitext(fn)  # get file extension
-        # make txt file for each file
-        out_json_path = os.path.join(
-            out_dir,
-            '{}.jsonl'.format(str('chunk_' + str(jsonl_chunk_counter)))
-        )
         if PDF_EXT_PATT.match(ext):  # Skip pdf files
             log('skipping file {} (PDF)'.format(fn))
             continue
@@ -186,7 +209,7 @@ def parse(
             out.close()
             err.close()
 
-            # get mathless plain text from latexml output
+            # get plain text from latexml output
             parser = etree.XMLParser()
 
             # check if smth went wrong with parsing latex to temporary xml file
@@ -210,6 +233,7 @@ def parse(
                 'paper_id': aid,
                 '_pdf_hash': None,
                 '_source_hash': None,
+                '_source_name': None,
                 'metadata': None,
                 'abstract': [],
                 'body_text': [],
@@ -217,13 +241,13 @@ def parse(
                 'ref_entries': {}
             })
 
-            paper_dict['_source_hash'] = source_file_hashes[aid]
+            paper_dict['_source_hash'] = source_file_info[aid]['hash']
+            paper_dict['_source_name'] = source_file_info[aid]['name']
 
-            # aid_versionless = aid.split('v')[0]
-            # metadata = arxiv_meta.get(aid_versionless, {})
-            # paper_dict['metadata'] = metadata
-            # abstract_text = metadata.get('abstract', '')
-            abstract_text = ''  # TODO
+            # get paper metadata
+            metadata = _get_paper_metadata(meta_db_cur, aid)
+            paper_dict['metadata'] = metadata
+            abstract_text = metadata.get('abstract', '')
             abstract = {
                 'section': 'Abstract',
                 'text': abstract_text,
@@ -515,24 +539,20 @@ def parse(
 
             paper_dict['body_text'] = paragraphs
 
-        # bundle paper dicts for presisting as JSONL (one JSONL per 100k pprs)
+        # bundle paper dicts for presisting as JSONL (one JSON line per paper)
         paper_dicts_list.append(paper_dict)
 
-        # persist 100k papers as JSONL, one paper per line
-        if file_iterator % 1000000 == 0:
-            with jsonlines.open(out_json_path, 'w') as writer:
-                print("Writing JSONL for", out_json_path)
-                writer.write_all(paper_dicts_list)
-            paper_dicts_list = []
-            jsonl_chunk_counter += 1
-
-    # persist last remaining papers
-    if not file_iterator % 1000000 == 0:
-        with jsonlines.open(out_json_path, 'w') as writer:
-            print("Writing JSONL finally for", out_json_path)
-            writer.write_all(paper_dicts_list)
-        paper_dicts_list = []
-        jsonl_chunk_counter += 1
+    # persist output in JSONL
+    tar_fn_base, ext = os.path.splitext(tar_fn)
+    out_json_path = os.path.join(
+        out_dir,
+        '{}.jsonl'.format(tar_fn_base)
+    )
+    with open(out_json_path, 'w') as f:
+        print("Writing JSONL finally for", out_json_path)
+        for ppr in paper_dicts_list:
+            line = '{}\n'.format(json.dumps(ppr))
+            f.write(line)
 
     log(('Citations: {} (not unique)\nUnmatched citations: {}'
          '').format(num_citations, num_citations_notfound))
@@ -546,6 +566,8 @@ if __name__ == '__main__':
         sys.exit()
     in_dir = sys.argv[1]
     out_dir = sys.argv[2]
-    ret = parse(in_dir, out_dir, incremental=False)
+    tar_fn = ''
+    source_file_info = {}
+    ret = parse(in_dir, out_dir, tar_fn, source_file_info, incremental=False)
     if not ret:
         sys.exit()

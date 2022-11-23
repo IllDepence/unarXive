@@ -121,12 +121,15 @@ def normalize(in_dir, out_dir, write_logs=True):
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
 
-    source_file_hashes = dict()
+    source_file_info = dict()
 
     for fn in os.listdir(in_dir):
         path = os.path.join(in_dir, fn)
         aid, ext = os.path.splitext(fn)
-        source_file_hashes[aid] = _source_file_hash(path)
+        source_file_info[aid] = {
+            'name': fn,
+            'hash': _source_file_hash(path)
+        }
         if PDF_EXT_PATT.match(ext):
             # copy over pdf file as is
             dest = os.path.join(out_dir, fn)
@@ -235,7 +238,7 @@ def normalize(in_dir, out_dir, write_logs=True):
         else:
             log('unexpected file {} in dump directory'.format(fn))
 
-    return source_file_hashes
+    return source_file_info
 
 
 if __name__ == '__main__':
