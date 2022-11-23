@@ -426,42 +426,56 @@ def parse(
 
                 for xref in containing_p.findall('xref'):
                     link = xref.get('url')
-                    link_text = etree.tostring(
+                    link_text_raw = etree.tostring(
                         xref,
                         encoding='unicode',
                         method='text'
                     )
-                    # clean link plain text for matching with bib entry plain text
-                    link_text = re.sub(r'\s+', ' ', link_text).strip()
+                    # clean link plain text for matching with
+                    # bib entry plain text
+                    link_text = re.sub(
+                        r'\s+',
+                        ' ',
+                        link_text_raw
+                    ).strip()
 
-                    match = ARXIV_URL_PATT.search(link)
-                    if match:
-                        id_part = match.group(1)
+                    aurl_match = ARXIV_URL_PATT.search(link)
+                    if aurl_match:
+                        id_part = aurl_match.group(1)
                         if len(link_text) != 0:
                             try:
                                 location_offset_start = text.index(link_text)
-                                location_offset_end = text.index(link_text) + len(link_text)
-
-                            # treat error if link text is not in bib entry text
+                                location_offset_end = text.index(link_text) + \
+                                    len(link_text)
                             except ValueError as e:
+                                # treat error if link text is not in
+                                # bib entry text
                                 location_offset_start = None
                                 location_offset_end = None
 
-                        # if there are links included in source file without corresponding visible text
                         else:
+                            # if there are links included in source file
+                            # without corresponding visible text
                             link_text = None
                             location_offset_start = None
                             location_offset_end = None
 
-                        arXiv_item_local_temp_dict = {'id': id_part, 'text': link_text, 'start': location_offset_start,
-                                                      'end': location_offset_end}
-                        contained_arXiv_ids_list.append(arXiv_item_local_temp_dict)
+                        arXiv_item_local_temp_dict = {
+                            'id': id_part,
+                            'text': link_text,
+                            'start': location_offset_start,
+                            'end': location_offset_end
+                        }
+                        contained_arXiv_ids_list.append(
+                            arXiv_item_local_temp_dict
+                        )
 
                     else:
                         if len(link_text) != 0:
                             try:
                                 location_offset_start = text.index(link_text)
-                                location_offset_end = text.index(link_text) + len(link_text)
+                                location_offset_end = text.index(link_text) + \
+                                    len(link_text)
                             except ValueError as e:
                                 location_offset_start = None
                                 location_offset_end = None
@@ -471,8 +485,12 @@ def parse(
                             location_offset_start = None
                             location_offset_end = None
 
-                        link_item_local_temp_dict = {'url': link, 'text': link_text, 'start': location_offset_start,
-                                                     'end': location_offset_end}
+                        link_item_local_temp_dict = {
+                            'url': link,
+                            'text': link_text,
+                            'start': location_offset_start,
+                            'end': location_offset_end
+                        }
                         contained_links_list.append(link_item_local_temp_dict)
 
                 paper_dict['bib_entries'][sha_hash_string][
@@ -481,7 +499,6 @@ def parse(
                 paper_dict['bib_entries'][sha_hash_string][
                     'contained_links'
                 ] = contained_links_list
-
 
             citations = tree.xpath('//cit')
             for cit in citations:
