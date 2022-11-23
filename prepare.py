@@ -36,7 +36,7 @@ def prepare(in_dir, out_dir, meta_db, write_logs=False):
     num_files_total = 0
     for tar_idx, tar_fn in enumerate(tar_fns):
         # for each tar archive
-        print('{}/{}'.format(tar_idx+1, tar_total))
+        print('{}/{} ({})'.format(tar_idx+1, tar_total, tar_fn))
         if tar_fn in done_tars:
             print('done in a previous run. skipping')
             continue
@@ -49,6 +49,7 @@ def prepare(in_dir, out_dir, meta_db, write_logs=False):
             # try file access
             try:
                 # try tar
+                is_tar = False
                 try:
                     is_tar = tarfile.is_tarfile(tar_path)
                 except IsADirectoryError:

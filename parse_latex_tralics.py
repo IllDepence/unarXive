@@ -13,6 +13,7 @@ import IPython
 from collections import OrderedDict, defaultdict
 from hashlib import sha1
 from lxml import etree
+from tqdm import tqdm
 
 PDF_EXT_PATT = re.compile(r'^\.pdf$', re.I)
 ARXIV_URL_PATT = re.compile(
@@ -171,7 +172,8 @@ def parse(
     paper_dicts_list = []
 
     # iterate over each file in input directory
-    for fn in os.listdir(in_dir):
+    fns = os.listdir(in_dir)
+    for fn in tqdm(fns, total=len(fns), unit='papers'):
         path = os.path.join(in_dir, fn)  # absolute path to current file
         # print('current file:', path)
         aid, ext = os.path.splitext(fn)  # get file extension
@@ -549,7 +551,6 @@ def parse(
         '{}.jsonl'.format(tar_fn_base)
     )
     with open(out_json_path, 'w') as f:
-        print("Writing JSONL finally for", out_json_path)
         for ppr in paper_dicts_list:
             line = '{}\n'.format(json.dumps(ppr))
             f.write(line)
