@@ -25,6 +25,7 @@ def gen_meta_db(in_fp):
             'year' integer,
             'month' integer,
             'aid' text,
+            'title' text,
             'json' text
         )
     """)
@@ -41,13 +42,14 @@ def gen_meta_db(in_fp):
             aid = aid_m.group(0)
             y = int(aid_m.group(2))
             m = int(aid_m.group(3))
+            title = ppr_meta['title']
             db_cur.execute(
                 (
                     "insert into paper "
-                    "('year','month','aid','json')"
-                    "values(?,?,?,?)"
+                    "('year','month','aid','title','json')"
+                    "values(?,?,?,?,?)"
                 ),
-                (y, m, aid, line.strip())
+                (y, m, aid, title, line.strip())
             )
     print('generating index')
     db_cur.execute(
