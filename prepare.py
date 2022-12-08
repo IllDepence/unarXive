@@ -11,7 +11,7 @@ from normalize_arxiv_dump import normalize
 from parse_latex_tralics import parse
 
 
-def prepare(in_dir, out_dir, meta_db, write_logs=False):
+def prepare(in_dir, out_dir, meta_db, tar_fn_patt, write_logs=False):
     if not os.path.isdir(in_dir):
         print('input directory does not exist')
         return False
@@ -30,7 +30,7 @@ def prepare(in_dir, out_dir, meta_db, write_logs=False):
             lines = f.readlines()
         done_tars = [l.strip() for l in lines]
 
-    tar_fns = os.listdir(in_dir)
+    tar_fns = [fn for fn in os.listdir(in_dir) if tar_fn_patt in fn]
     tar_total = len(tar_fns)
     num_pdf_total = 0
     num_files_total = 0
@@ -122,13 +122,17 @@ def prepare(in_dir, out_dir, meta_db, write_logs=False):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
+    if len(sys.argv) not in [4, 5]:
         print((
             'usage: python3 prepare.py </path/to/in/dir> </path/to/out/dir> '
-            '</path/to/metadata.db>'
+            '</path/to/metadata.db> [<tar_fn_patt>]'
         ))
         sys.exit()
     in_dir = sys.argv[1]
     out_dir_dir = sys.argv[2]
     meta_db = sys.argv[3]
-    ret = prepare(in_dir, out_dir_dir, meta_db, write_logs=True)
+    if len(sys.argv) == 5:
+        tar_fn_patt = sys.argv[4]
+    else:
+        tar_fn_patt = '.tar'
+    ret = prepare(in_dir, out_dir_dir, meta_db, tar_fn_patt, write_logs=True)
