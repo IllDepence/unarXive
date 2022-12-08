@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 import uuid
-import IPython
+# import IPython
 from collections import OrderedDict, defaultdict
 from hashlib import sha1
 from lxml import etree
@@ -21,7 +21,7 @@ ARXIV_URL_PATT = re.compile(
      r')?[\d\.]{5,10}(v\d)?$)'),
     re.I
 )
-ARXIV_ID_PATT = re.compile(r'^(.*\/)?(\d\d)(\d\d).*$')
+ARXIV_ID_PATT = re.compile(r'^([a-zA-Z-\.]+)?\/?(\d\d)(\d\d)(.*)$')
 
 
 def _write_debug_xml(tree):
@@ -129,7 +129,19 @@ def _get_paper_metadata(meta_db_cur, aid):
 
     aid_m = ARXIV_ID_PATT.match(aid)
     assert aid_m is not None
-    aid = aid_m.group(0)
+    if len(aid_m.group(1)) > 0:
+        # old style ID, have to add back a slash
+        # because we’re working with the “file name
+        # version” of the ID here
+        aid = '{}/{}{}{}'.format(
+            aid_m.group(1),
+            aid_m.group(2),
+            aid_m.group(3),
+            aid_m.group(4),
+        )
+    else:
+        # new style ID, can use as is
+        aid = aid_m.group(0)
     curr_ppr_y = int(aid_m.group(2))
     curr_ppr_m = int(aid_m.group(3))
     meta_db_cur.execute(
