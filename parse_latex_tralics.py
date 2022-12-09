@@ -144,7 +144,7 @@ def _filename_to_aid(fn, details=False):
     if aid_m is None:
         print('Unexpected non-arXiv file "{}"'.format(fn))
         raise ValueError
-    if len(aid_m.group(1)) > 0:
+    if aid_m.group(1) in None:
         # old style ID, have to add back a slash
         # because we’re working with the “file name
         # version” of the ID here
@@ -337,16 +337,21 @@ def parse(
                 elem_uuid = uuid.uuid4()  # create uuid for each fig/tbl
 
                 caption_text = ''
-                for element in xtag.iter():
-                    if element.tag in ['head', 'caption']:
-                        elem_text = etree.tostring(
-                            element,
-                            encoding='unicode',
-                            method='text',
-                            with_tail=False
-                        )
-                        if len(elem_text) > 0:
-                            caption_text = elem_text
+                try:
+                    for element in xtag.iter():
+                            if element.tag in ['head', 'caption']:
+                                elem_text = etree.tostring(
+                                    element,
+                                    encoding='unicode',
+                                    method='text',
+                                    with_tail=False
+                                )
+                                if len(elem_text) > 0:
+                                    caption_text = elem_text
+                except TypeError:
+                    # can get a "NoneType cannot be serialized" in rare
+                    # cases
+                    continue
                 if len(caption_text) < 1:
                     caption_text = 'NO_CAPTION'
 
