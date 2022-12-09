@@ -144,7 +144,7 @@ def _filename_to_aid(fn, details=False):
     if aid_m is None:
         print('Unexpected non-arXiv file "{}"'.format(fn))
         raise ValueError
-    if aid_m.group(1) is None:
+    if aid_m.group(1) is not None:
         # old style ID, have to add back a slash
         # because we’re working with the “file name
         # version” of the ID here
