@@ -125,8 +125,8 @@ def normalize(in_dir, out_dir, write_logs=True):
 
     for fn in os.listdir(in_dir):
         path = os.path.join(in_dir, fn)
-        aid, ext = os.path.splitext(fn)
-        source_file_info[aid] = {
+        aid_fn_safe, ext = os.path.splitext(fn)
+        source_file_info[aid_fn_safe] = {
             'name': fn,
             'hash': _source_file_hash(path)
         }
@@ -190,7 +190,7 @@ def normalize(in_dir, out_dir, write_logs=True):
                         latexpand_args = ['latexpand',
                                           main_tex_fn]
                     # flatten to single tex file and save
-                    new_tex_fn = '{}.tex'.format(aid)
+                    new_tex_fn = '{}.tex'.format(aid_fn_safe)
                     tmp_dest = os.path.join(tmp_dir_path, new_tex_fn)
                     out = open(tmp_dest, mode='w')
                     if write_logs:
@@ -199,7 +199,7 @@ def normalize(in_dir, out_dir, write_logs=True):
                             )
                     else:
                         err = open(os.devnull, 'w')
-                    err.write('\n------------- {} -------------\n'.format(aid))
+                    err.write('\n------------- {} -------------\n'.format(aid_fn_safe))
                     err.flush()
                     subprocess.run(latexpand_args, stdout=out, stderr=err,
                                    cwd=tmp_dir_path)
@@ -225,7 +225,7 @@ def normalize(in_dir, out_dir, write_logs=True):
                 if re.search(MAIN_TEX_PATT, cntnt) is None:
                     log('unexpected content in dump archive {}'.format(fn))
                     continue
-                new_fn = '{}.tex'.format(aid)
+                new_fn = '{}.tex'.format(aid_fn_safe)
                 if PRE_FIX_NATBIB:
                     cntnt = NATBIB_PATT.sub(r'\\cite{\3}', cntnt)
                 if PRE_FIX_BIBOPT:

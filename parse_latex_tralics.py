@@ -123,12 +123,27 @@ def _get_local_refs(par_text):
     return cite_spans, ref_spans
 
 
-def _get_paper_metadata(meta_db_cur, aid):
-    """ Retrieve metadata from the given DB cursor.
+def _filename_to_aid(fn, details=False):
+    """ Converts a file name resembling an arXiv ID to the
+        actual arXiv ID.
+
+        Example:
+            in: hep-th0309136.tex
+            out: hep-th/0309136
+
+        If details == True returns a tuple
+        (arXiv ID, year, month, file extension)
+
+        Example:
+            in: hep-th0309136.tex
+            out: hep-th/0309136, 3, 9, .tex
     """
 
-    aid_m = ARXIV_ID_PATT.match(aid)
-    assert aid_m is not None
+    fn_base, ext = os.path.splitext(fn)
+    aid_m = ARXIV_ID_PATT.match(fn_base)
+    if aid_m is None:
+        print('Unexpected non-arXiv file "{}"'.format(fn))
+        raise ValueError
     if len(aid_m.group(1)) > 0:
         # old style ID, have to add back a slash
         # because we’re working with the “file name
@@ -144,11 +159,21 @@ def _get_paper_metadata(meta_db_cur, aid):
         aid = aid_m.group(0)
     curr_ppr_y = int(aid_m.group(2))
     curr_ppr_m = int(aid_m.group(3))
+
+    if details:
+        return aid, curr_ppr_y, curr_ppr_m, ext
+    return aid
+
+
+def _get_paper_metadata(meta_db_cur, aid, ppr_year, ppr_month):
+    """ Retrieve metadata from the given DB cursor.
+    """
+
     meta_db_cur.execute(
         '''
         select json from paper where year=? and month=? and aid=?
         ''',
-        (curr_ppr_y, curr_ppr_m, aid)
+        (ppr_year, ppr_month, aid)
     )
     metadata_tup = meta_db_cur.fetchone()
     try:
@@ -187,14 +212,16 @@ def parse(
     fns = os.listdir(in_dir)
     for fn in tqdm(fns, total=len(fns), unit='papers'):
         path = os.path.join(in_dir, fn)  # absolute path to current file
-        # print('current file:', path)
-        aid, ext = os.path.splitext(fn)  # get file extension
+        if fn in ['log.txt', 'log_latexpand.txt']:
+            continue
+        aid, ppr_year, ppr_month, ext = _filename_to_aid(fn, details=True)
+        aid_fn_safe = aid.replace('/', '')
         if PDF_EXT_PATT.match(ext):  # Skip pdf files
             log('skipping file {} (PDF)'.format(fn))
             continue
         # write latex contents in a temporary xml file
         with tempfile.TemporaryDirectory() as tmp_dir_path:
-            tmp_xml_path = os.path.join(tmp_dir_path, '{}.xml'.format(aid))
+            tmp_xml_path = os.path.join(tmp_dir_path, '{}.xml'.format(aid_fn_safe))
             # run latexml
             tralics_args = ['tralics',
                             '-silent',
@@ -255,11 +282,11 @@ def parse(
                 'ref_entries': {}
             })
 
-            paper_dict['_source_hash'] = source_file_info[aid]['hash']
-            paper_dict['_source_name'] = source_file_info[aid]['name']
+            paper_dict['_source_hash'] = source_file_info[aid_fn_safe]['hash']
+            paper_dict['_source_name'] = source_file_info[aid_fn_safe]['name']
 
             # get paper metadata
-            metadata = _get_paper_metadata(meta_db_cur, aid)
+            metadata = _get_paper_metadata(meta_db_cur, aid, ppr_year, ppr_month)
             paper_dict['metadata'] = metadata
             abstract_text = metadata.get('abstract', '')
             abstract = {
