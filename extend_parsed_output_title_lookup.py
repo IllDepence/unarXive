@@ -277,7 +277,6 @@ def extend_parsed_arxiv_chunk(jsonl_file_path):
             print("Worker reading file ", jsonl_file_path, "..")
             for publication in chunk:
 
-                print("####### ", i, " ###### ")
                 json_data = json.loads(publication)
                 # print(json_data['paper_id'], json_data['bib_entries'])
 
@@ -511,10 +510,11 @@ def extend_parsed_arxiv_chunk(jsonl_file_path):
 
                 print(f"Done with publication, writing json to chunk of {jsonl_file_path}..")
                 output_chunk.write(json.dumps(json_data))
+                output_chunk.write("\n")
 
                 i += 1
-                if i % 1000 == 0:
-                    print("###", i, "###")
+                if i % 100 == 0:
+                    print("### publication no.", i, "in current file ###")
 
 
             print(f"Worker done with chunk file {jsonl_file_path}. \nErrors in title determination in bibitems:",
