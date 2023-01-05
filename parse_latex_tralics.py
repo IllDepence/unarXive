@@ -376,8 +376,13 @@ def parse(
             for ftag in tree.xpath('//{}'.format('formula')):
                 # uuid
                 formula_uuid = uuid.uuid4()
+                tex_tag = 'texmath'
+                if fn == '1308.0481.tex':
+                    # for some weird reason the texmath tags are
+                    # different in the etree of this particular paper
+                    tex_tag = 'Texmath'
                 latex_content = etree.tostring(
-                    ftag.find('texmath'),
+                    ftag.find(tex_tag),
                     encoding='unicode',
                     method='text',
                     with_tail=False
