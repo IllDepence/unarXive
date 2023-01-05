@@ -19,11 +19,12 @@ import traceback
 from datetime import time
 
 
-
 ARXIV_URL_PATT = re.compile(
     r'arxiv\.org\/[a-z0-9-]{1,10}\/(([a-z0-9-]{1,15}\/)?[\d\.]{4,9}\d)', re.I)
 ARXIV_ID_PATT = re.compile(
     r'arXiv:(([a-z0-9-]{1,15}\/)?[\d\.]{4,9}\d)', re.I)
+ARXIV_ID_PATT_DATE = re.compile(
+    r'^([a-zA-Z-\.]+)?\/?(\d\d)(\d\d)(.*)$')
 DOI_PATT = re.compile(
     r'10.\d{4,9}/[-._;()/:A-Z0-9]+$', re.I)
 FORMULA_PATT = re.compile(
@@ -44,13 +45,18 @@ def find_arxiv_id(text):
     return False
 
 
-def title_lookup_in_arxiv_metadata_db(arxiv_id, cursor_arxiv):
+def title_lookup_in_arxiv_metadata_db(arxiv_id, cursor_arxiv, ppr_year, ppr_month):
     # columns in table named paper:
     # year, month, aid, title, json
 
-    query_aid_string = "SELECT title from paper WHERE aid= ?"
-    metadata_title = cursor_arxiv.execute(query_aid_string, (str(arxiv_id),)).fetchall()
-    return metadata_title[0][0]
+    query_aid_string = "SELECT  json from paper where year=? and month=? and aid=?"
+    #query_aid_string = "SELECT title from paper WHERE aid= ?"
+    metadata_tup  = cursor_arxiv.execute(query_aid_string, (ppr_year, ppr_month, str(arxiv_id),)).fetchone()
+    try:
+        metadata = json.loads(metadata_tup[0])
+    except (TypeError, IndexError) as e:
+        return {}
+    return metadata.get('title', '')
 
 
 def find_title_in_crossref_by_doi(given_doi):
@@ -272,7 +278,7 @@ def extend_parsed_arxiv_chunk(jsonl_file_path):
 
     # connection to local arxiv db for lookup using arxiv ID
     connection_arxiv_db = sqlite3.connect("unarXive_code_repo/arxiv-metadata-oai-snapshot_221115.sqlite")
-    cursor_arxiv = connection_arxiv_db.cursor() 
+    cursor_arxiv = connection_arxiv_db.cursor()
 
     # check if folder exists
     if not os.path.exists(output_dir_enriched_parsed_output + jsonl_file_path.split("/")[-2]):
@@ -324,11 +330,21 @@ def extend_parsed_arxiv_chunk(jsonl_file_path):
                                 if type(bib_entry_aid) is list:
                                     if len(bib_entry_aid) != 0:
                                         # example entry [{'id': '1101.2663', 'text': 'arXiv:1101.2663 [hep-ex] .', 'start': 50, 'end': 76}]
+
+                                        #def title_lookup_in_arxiv_metadata_db(arxiv_id, cursor_arxiv, ppr_year,ppr_month):
+                                        aid = str(bib_entry_aid[0]['id'])
+                                        aid_m = ARXIV_ID_PATT_DATE.match(aid)
+                                        aid_year = aid_m.group(2)
+                                        aid_month = aid_m.group(3)
+
                                         title_from_arxive_meta_db = title_lookup_in_arxiv_metadata_db(
-                                            str(bib_entry_aid[0]['id']), cursor_arxiv)
+                                            aid, cursor_arxiv, aid_year, aid_month)
                                 else:
+                                    aid_m = ARXIV_ID_PATT_DATE.match(str(bib_entry_aid))
+                                    aid_year = aid_m.group(2)
+                                    aid_month = aid_m.group(3)
                                     title_from_arxive_meta_db = title_lookup_in_arxiv_metadata_db(str(bib_entry_aid),
-                                                                                                  cursor_arxiv)
+                                                                                                  cursor_arxiv, aid_year, aid_month)
 
                                 if title_from_arxive_meta_db is not None:
                                     if len(title_from_arxive_meta_db) != 0:
