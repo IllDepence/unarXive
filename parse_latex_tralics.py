@@ -376,25 +376,28 @@ def parse(
             for ftag in tree.xpath('//{}'.format('formula')):
                 # uuid
                 formula_uuid = uuid.uuid4()
-                tex_tag = 'texmath'
-                if fn == '1308.0481.tex':
-                    # for some weird reason the texmath tags are
-                    # different in the etree of this particular paper
-                    tex_tag = 'Texmath'
-                latex_content = etree.tostring(
-                    ftag.find(tex_tag),
-                    encoding='unicode',
-                    method='text',
-                    with_tail=False
-                )
-                # mathml_content = etree.tostring(
-                #     etree.ETXPath(
-                #         '{http://www.w3.org/1998/Math/MathML}math'
-                #     )(ftag)[0],
-                #     encoding='unicode',
-                #     method='xml',
-                #     with_tail=False
-                # )
+                try:
+                    latex_content = etree.tostring(
+                        ftag.find('texmath'),
+                        encoding='unicode',
+                        method='text',
+                        with_tail=False
+                    )
+                except TypeError:
+                    # very rare case where Tralics creates an XML that uses
+                    # Texmath tags instead of texmath
+                    # kown for:
+                    # - 1308.0481
+                    # - 1901.06986
+                    try:
+                        latex_content = etree.tostring(
+                            ftag.find('Texmath'),
+                            encoding='unicode',
+                            method='text',
+                            with_tail=False
+                        )
+                    except:
+                        latex_content = 'NO_LATEX_CONTENT'
                 if ftag.tail:
                     new_tail = ' {}'.format(ftag.tail)
                 else:
