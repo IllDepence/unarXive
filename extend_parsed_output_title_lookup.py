@@ -1,22 +1,20 @@
 import psycopg2
-from psycopg2.extras import Json, DictCursor
 import json
 import os
 import glob
-import gzip
 import re
 import unidecode
 import unicodedata
-import jsonlines
 import sqlite3
 import requests
-from datetime import datetime
 import subprocess
 import lxml
-from bs4 import BeautifulSoup
-from multiprocessing import Pool
+import sys
 import traceback
-from datetime import time
+from bs4 import BeautifulSoup
+from datetime import datetime, time
+from multiprocessing import Pool
+from psycopg2.extras import Json, DictCursor
 
 
 ARXIV_URL_PATT = re.compile(
@@ -63,21 +61,24 @@ def find_title_in_crossref_by_doi(given_doi):
     """ Given a DOI, try to get a work's title using crossref.org
     """
 
-    # doi_base_url = 'https://data.crossref.org/'
-    doi_headers = {'Accept': 'json',
-                   'User-Agent': ('DoiToTitleScript (working on title extraction)', 'mailto:udevz@student.kit.edu')}
-
     doi_base_url = "https://api.crossref.org/works/"
-    req = '{}{}'.format(doi_base_url, given_doi) + '?mailto=udevz@student.kit.edu'
+    mail = 'tarek,saier@kit.edu'
+    req = '{}{}?mailto={}'.format(
+        doi_base_url,
+        given_doi,
+        mail
+    )
     try:
         resp = requests.get(
             req,
-            # headers=doi_headers,
             timeout=360
         )
 
         rate_lim_lim = resp.headers.get('X-Rate-Limit-Limit', '9001')
-        rate_lim_int = resp.headers.get('X-Rate-Limit-Interval', '1s').replace('s', '')
+        rate_lim_int = resp.headers.get(
+            'X-Rate-Limit-Interval',
+            '1s'
+        ).replace('s', '')
     except requests.RequestException:
         print("Request Exception")
         return False
@@ -100,6 +101,7 @@ def find_title_in_crossref_by_doi(given_doi):
 
 
 def find_title_with_grobid_in_string(bib_ref_string):
+    # FIXME: use requests to access grobid
     grobid_call_string = f'curl --silent -X POST -d "citations={bib_ref_string}" localhost:8070/api/processCitation'
     data = subprocess.Popen(grobid_call_string, stdout=subprocess.PIPE, shell=True)  #
     (output, err) = data.communicate()
@@ -220,16 +222,15 @@ def match_title_in_openalexdb(query_string, bib_entry_title_norm, bib_entry_ref_
         return
 
 
-id_keys_in_output = ['open_alex_id', 'sem_open_alex_id', 'pubmed_id', 'pmc_id', 'doi']
-
-
 def map_ids_from_openalexdb_match_to_dict(matched_pub_from_db):
+    id_keys_in_output = ['open_alex_id', 'sem_open_alex_id', 'pubmed_id', 'pmc_id', 'doi']
     openalexdb_match_ids = matched_pub_from_db[4]  # ids are in column [4] of the returned data from OpenAlex table
     bib_entry_ids_dict = {}
 
     # go through all four ID types in openalexdb and add to temporary bib_entry_ids_dict
     # recall openalexdb IDs column structure: list of IDs [oa_id, pubmedid, pmcid, doi]
-    # recall wanted dict structure: id_keys_in_output = ['open_alex_id', 'sem_open_alex_id', 'pubmed_id', 'pmc_id', 'doi', 'arXiv_id]
+    # recall desired dict structure: id_keys_in_output = ['open_alex_id', 'sem_open_alex_id', 'pubmed_id', 'pmc_id', 'doi', 'arXiv_id]
+    #                                                             not in openalex data -> needs to be determined later somehow ^
 
     bib_entry_ids_dict[id_keys_in_output[0]] = ""
     if len(openalexdb_match_ids[0]) != 0:
@@ -239,6 +240,7 @@ def map_ids_from_openalexdb_match_to_dict(matched_pub_from_db):
     if len(openalexdb_match_ids[0]) != 0:
         bib_entry_ids_dict[id_keys_in_output[1]] = 'https://semopenalex.org/work/' + openalexdb_match_ids[0]
 
+    #    ↓ field in `ids` dict ↓                ↓ [oa_id, pubmedid, pmcid, doi]
     bib_entry_ids_dict[id_keys_in_output[2]] = openalexdb_match_ids[1]
     bib_entry_ids_dict[id_keys_in_output[3]] = openalexdb_match_ids[2]
     bib_entry_ids_dict[id_keys_in_output[4]] = openalexdb_match_ids[3]
@@ -246,25 +248,8 @@ def map_ids_from_openalexdb_match_to_dict(matched_pub_from_db):
     return bib_entry_ids_dict
 
 
-######
-input_dir_parsed_output_jsons = r'/opt/unarXive_2022/arxiv_parsed/*'
-output_dir_enriched_parsed_output = r'/opt/unarXive_2022/parsed_data_enriched/'
-CPU_THREADS = 15
-######
-
-# collect all .jsonl chunks to iterate over with multiple workers (see no. of CPU THREADS above)
-jsonl_file_list = []
-for filename in glob.glob(os.path.join(input_dir_parsed_output_jsons, '*.jsonl')):
-    jsonl_file_list.append(filename)
-# print(jsonl_file_list)
-
-
-bib_item_no_title_error_counter_overall = 0
-bib_item_counter_overall = 0
-saved_requests_counter_overall = 0
-
-
-def extend_parsed_arxiv_chunk(jsonl_file_path):
+def extend_parsed_arxiv_chunk(params):
+    jsonl_file_path, output_root_dir, match_db_uri, meta_db_uri = params
     i = 0
     bib_item_counter = 0
     bib_item_no_title_error_counter = 0
@@ -273,22 +258,22 @@ def extend_parsed_arxiv_chunk(jsonl_file_path):
     start_time = datetime.now()
 
     # create connection to local openalex database (with openalex and crossref tables)
-    conn = psycopg2.connect(database="openalex")
+    conn = psycopg2.connect(database=match_db_uri)
     cursor = conn.cursor()
 
     # connection to local arxiv db for lookup using arxiv ID
-    connection_arxiv_db = sqlite3.connect("unarXive_code_repo/arxiv-metadata-oai-snapshot_221115.sqlite")
+    connection_arxiv_db = sqlite3.connect(meta_db_uri)
     cursor_arxiv = connection_arxiv_db.cursor()
 
     # check if folder exists
-    if not os.path.exists(output_dir_enriched_parsed_output + jsonl_file_path.split("/")[-2]):
-        os.makedirs(output_dir_enriched_parsed_output + jsonl_file_path.split("/")[-2])
+    chunk_fn = jsonl_file_path.split("/")[-1]  # FIXME: use os.path instead of
+    year_dir = jsonl_file_path.split("/")[-2]  # fiddling with strings manuall
+    year_dir_path = os.path.join(output_root_dir, year_dir)
+    enriched_chunk_fp = os.path.join(year_dir_path, chunk_fn)
+    if not os.path.exists(year_dir_path):
+        os.makedirs(year_dir_path)
 
-    # for filename in glob.glob(os.path.join(input_dir_parsed_output_jsons, '*.jsonl')):
-    with open(
-            (output_dir_enriched_parsed_output + jsonl_file_path.split("/")[-2] + "/" + jsonl_file_path.split("/")[-1]),
-            "w",
-            encoding="utf-8") as output_chunk:
+    with open(enriched_chunk_fp, "w", encoding="utf-8") as output_chunk:
         with open(jsonl_file_path, 'r', encoding='utf-8') as chunk:
             print("Worker reading file ", jsonl_file_path, "..")
             output_chunk_temp = ""
@@ -521,7 +506,7 @@ def extend_parsed_arxiv_chunk(jsonl_file_path):
                                 bib_entry_ids_dict = map_ids_from_openalexdb_match_to_dict(matching_openalex_pub)
 
                                 # add data from OpenAlex to JSON object of current publication
-                                json_data['bib_entries'][bib_entry]['ids'] = {}
+                                json_data['bib_entries'][bib_entry]['ids'] = {}   # TODO: maybe use a OrderedDict
                                 json_data['bib_entries'][bib_entry]['ids']['open_alex_id'] = bib_entry_ids_dict[
                                     'open_alex_id']
                                 json_data['bib_entries'][bib_entry]['ids']['sem_open_alex_id'] = bib_entry_ids_dict[
@@ -540,8 +525,6 @@ def extend_parsed_arxiv_chunk(jsonl_file_path):
 
                         # print("bib item count ",bib_item_counter, "i:",i)
                         # print(json_data['bib_entries'][bib_entry])
-
-                        # recall wanted dict structure: id_keys_in_output = ['open_alex_id', 'sem_open_alex_id', 'pubmed_id', 'pmc_id', 'doi']
 
                         # print update log to screen
                         if bib_item_counter % 5000 == 0:
@@ -588,12 +571,12 @@ def extend_parsed_arxiv_chunk(jsonl_file_path):
             print("Overall bib_item_matching_success_quota = {:.2f}".format((
                                                                                         bib_item_counter - bib_item_no_title_error_counter - bib_item_title_not_in_openalex_error_counter) / bib_item_counter))
 
-            if not os.path.exists(output_dir_enriched_parsed_output + "logs"):
-                os.makedirs(output_dir_enriched_parsed_output + "logs")
+            if not os.path.exists(output_root_dir + "logs"):
+                os.makedirs(output_root_dir + "logs")
 
             # write log
             with open(
-                    output_dir_enriched_parsed_output + "logs/" + jsonl_file_path.split("/")[-1] + "-matching-log.json",
+                    output_root_dir + "logs/" + jsonl_file_path.split("/")[-1] + "-matching-log.json",
                     "w") as log_file:
                 end_time = datetime.now()
 
@@ -619,6 +602,43 @@ def extend_parsed_arxiv_chunk(jsonl_file_path):
     connection_arxiv_db.close()
 
 
-pool = Pool(CPU_THREADS, maxtasksperchild=5)
-pool.map(extend_parsed_arxiv_chunk, jsonl_file_list)
-pool.close()
+def match(in_dir, out_dir, match_db_uri, meta_db_uri, num_workers):
+    # in_dir = '/opt/unarXive_2022/arxiv_parsed'
+    # out_dir = '/opt/unarXive_2022/parsed_data_enriched/'
+    # match_db_uri = 'openalex'
+    # meta_db_uri = '/opt/unarXive_2022/unarXive_code_repo/arxiv-metadata-oai-snapshot_230101.sqlite'
+    input_fns_glob_patt = os.path.join(
+        in_dir,     # root dir path
+        '*',        # year dir
+        '*.jsonl'   # JSONl files
+    )
+
+    # collect all .jsonl chunks to iterate over with multiple workers
+    # (see no. of CPU THREADS above)
+    worker_params = []
+    for input_file_path in glob.glob(input_fns_glob_patt):
+        worker_params.append(
+            (
+                input_file_path,
+                out_dir,
+                match_db_uri,
+                meta_db_uri
+            )
+        )
+
+    pool = Pool(num_workers, maxtasksperchild=5)
+    pool.map(extend_parsed_arxiv_chunk, worker_params)
+    pool.close()
+
+
+if __name__ == '__main__':
+    if len(sys.argv) != 6:
+        print('usage ...')
+        sys.exit()
+
+    in_dir = sys.argv[1]
+    out_dir = sys.argv[2]
+    match_db_uri = sys.argv[3]
+    meta_db_uri = sys.argv[4]
+    num_workers = int(sys.argv[5])
+    match(in_dir, out_dir, match_db_uri, meta_db_uri, num_workers)

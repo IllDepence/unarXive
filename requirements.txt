@@ -4,3 +4,6 @@ python-magic
 requests
 unidecode
 tqdm
+psycopg2
+# ^ requires system package libpq-dev
+beautifulsoup4
