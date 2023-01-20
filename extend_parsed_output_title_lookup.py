@@ -100,12 +100,13 @@ def find_title_in_crossref_by_doi(given_doi):
         return False
 
 
-def find_title_with_grobid_in_string(bib_ref_string):
-    # FIXME: use requests to access grobid
-    grobid_call_string = f'curl --silent -X POST -d "citations={bib_ref_string}" localhost:8070/api/processCitation'
-    data = subprocess.Popen(grobid_call_string, stdout=subprocess.PIPE, shell=True)  #
-    (output, err) = data.communicate()
-    return output, err
+def find_title_with_grobid_in_string(grobid_url, bib_ref_string):
+    response = requests.post(grobid_url, data={'citations': bib_ref_string})
+
+    if response.status_code == 200:
+        return response.text
+    else:
+        return False
 
 
 def normalize_title(title_string):
@@ -249,7 +250,7 @@ def map_ids_from_openalexdb_match_to_dict(matched_pub_from_db):
 
 
 def extend_parsed_arxiv_chunk(params):
-    jsonl_file_path, output_root_dir, match_db_uri, meta_db_uri = params
+    jsonl_file_path, output_root_dir, match_db_uri, meta_db_uri, grobid_url = params
     i = 0
     bib_item_counter = 0
     bib_item_no_title_error_counter = 0
@@ -430,11 +431,11 @@ def extend_parsed_arxiv_chunk(params):
                                                                                                       'latex'])
                                     # print("[regex formula] replaced formula in title:", bib_item_ref_string_clean)
 
-                            # curl grobid
-                            output, err = find_title_with_grobid_in_string(bib_item_ref_string_clean)
+                            # get title from GROBID API
+                            grobid_bibstruct_xml = find_title_with_grobid_in_string(grobid_url, bib_item_ref_string_clean)
 
-                            if output is not None:
-                                grobid_returned_data_xml = BeautifulSoup(output, 'lxml')
+                            if grobid_bibstruct_xml:
+                                grobid_returned_data_xml = BeautifulSoup(grobid_bibstruct_xml, 'lxml')
                                 grobid_title_results = grobid_returned_data_xml.findAll('title')
 
                                 for t in grobid_title_results:
@@ -602,11 +603,12 @@ def extend_parsed_arxiv_chunk(params):
     connection_arxiv_db.close()
 
 
-def match(in_dir, out_dir, match_db_uri, meta_db_uri, num_workers):
+def match(in_dir, out_dir, match_db_uri, meta_db_uri, grobid_url, num_workers):
     # in_dir = '/opt/unarXive_2022/arxiv_parsed'
     # out_dir = '/opt/unarXive_2022/parsed_data_enriched/'
     # match_db_uri = 'openalex'
     # meta_db_uri = '/opt/unarXive_2022/unarXive_code_repo/arxiv-metadata-oai-snapshot_230101.sqlite'
+    # grobid_url = 'http://localhost:8070/api/processCitation'
     input_fns_glob_patt = os.path.join(
         in_dir,     # root dir path
         '*',        # year dir
@@ -622,7 +624,8 @@ def match(in_dir, out_dir, match_db_uri, meta_db_uri, num_workers):
                 input_file_path,
                 out_dir,
                 match_db_uri,
-                meta_db_uri
+                meta_db_uri,
+                grobid_url
             )
         )
 
@@ -632,7 +635,7 @@ def match(in_dir, out_dir, match_db_uri, meta_db_uri, num_workers):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 6:
+    if len(sys.argv) != 7:
         print('usage ...')
         sys.exit()
 
@@ -640,5 +643,6 @@ if __name__ == '__main__':
     out_dir = sys.argv[2]
     match_db_uri = sys.argv[3]
     meta_db_uri = sys.argv[4]
-    num_workers = int(sys.argv[5])
-    match(in_dir, out_dir, match_db_uri, meta_db_uri, num_workers)
+    grobid_url = sys.argv[5]
+    num_workers = int(sys.argv[6])
+    match(in_dir, out_dir, match_db_uri, meta_db_uri, grobid_url, num_workers)
