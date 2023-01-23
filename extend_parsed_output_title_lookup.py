@@ -192,26 +192,30 @@ def find_title_in_crossref_by_doi(given_doi):
         return False
 
 
-def find_title_with_grobid_in_string(grobid_url, bib_ref_string):
+def find_title_with_grobid_in_string(grobid_host, bib_ref_string):
+    grobid_url = 'http://' + grobid_host + ':8070/api/processCitation'
     response = requests.post(grobid_url, data={'citations': bib_ref_string})
 
     if response.status_code == 200:
         return response.text
     else:
+        print('GROBID non 200 response:')
+        print('\tstatus_code: {}'.format(response.status_code))
+        print('\ttext: {}'.format(response.response.text))
         return False
 
 
 def normalize_title(title_string):
-    title_string_norm = re.sub('[^\w]', ' ', title_string)
-    title_string_norm = re.sub('\s+', ' ', title_string_norm)
+    title_string_norm = re.sub(r'[^\w]', ' ', title_string)
+    title_string_norm = re.sub(r'\s+', ' ', title_string_norm)
     title_string_norm = unicodedata.normalize('NFD', title_string_norm)
     title_string_norm = unidecode.unidecode(title_string_norm)
     return title_string_norm.strip().lower()
 
 
 def normalize_author_name(author_string):
-    author_string_norm = re.sub('[^\w]', ' ', author_string)
-    author_string_norm = re.sub('\s+', ' ', author_string_norm)
+    author_string_norm = re.sub(r'[^\w]', ' ', author_string)
+    author_string_norm = re.sub(r'\s+', ' ', author_string_norm)
     author_string_norm = unicodedata.normalize('NFD', author_string_norm)
     author_string_norm = unidecode.unidecode(author_string_norm)
     return author_string_norm.strip().lower()
@@ -342,7 +346,7 @@ def map_ids_from_openalexdb_match_to_dict(matched_pub_from_db):
 
 
 def extend_parsed_arxiv_chunk(params):
-    jsonl_file_path, output_root_dir, match_db_host, meta_db_uri, grobid_url = params
+    jsonl_file_path, output_root_dir, match_db_host, meta_db_uri, grobid_host = params
     i = 0
     bib_item_counter = 0
     bib_item_no_title_error_counter = 0
@@ -535,7 +539,7 @@ def extend_parsed_arxiv_chunk(params):
                                     # print("[regex formula] replaced formula in title:", bib_item_ref_string_clean)
 
                             # get title from GROBID API
-                            grobid_bibstruct_xml = find_title_with_grobid_in_string(grobid_url, bib_item_ref_string_clean)
+                            grobid_bibstruct_xml = find_title_with_grobid_in_string(grobid_host, bib_item_ref_string_clean)
 
                             if grobid_bibstruct_xml:
                                 grobid_returned_data_xml = BeautifulSoup(grobid_bibstruct_xml, 'lxml')
@@ -706,12 +710,13 @@ def extend_parsed_arxiv_chunk(params):
     connection_arxiv_db.close()
 
 
-def match(in_dir, out_dir, match_db_host, meta_db_uri, grobid_url, num_workers):
+def match(in_dir, out_dir, match_db_host, meta_db_uri, grobid_host, num_workers):
     # in_dir = '/opt/unarXive_2022/arxiv_parsed'
     # out_dir = '/opt/unarXive_2022/parsed_data_enriched/'
     # match_db_host = '129.13.152.175'
     # meta_db_uri = '/opt/unarXive_2022/unarXive_code_repo/arxiv-metadata-oai-snapshot_230101.sqlite'
-    # grobid_url = 'http://localhost:8070/api/processCitation'
+    # grobid_host = 'http://localhost:8070/api/processCitation'
+    # grobid_host = '129.13.152.175'
     input_fns_glob_patt = os.path.join(
         in_dir,     # root dir path
         '*',        # year dir
@@ -728,7 +733,7 @@ def match(in_dir, out_dir, match_db_host, meta_db_uri, grobid_url, num_workers):
                 out_dir,
                 match_db_host,
                 meta_db_uri,
-                grobid_url
+                grobid_host
             )
         )
 
@@ -746,6 +751,6 @@ if __name__ == '__main__':
     out_dir = sys.argv[2]
     match_db_host = sys.argv[3]
     meta_db_uri = sys.argv[4]
-    grobid_url = sys.argv[5]
+    grobid_host = sys.argv[5]
     num_workers = int(sys.argv[6])
-    match(in_dir, out_dir, match_db_host, meta_db_uri, grobid_url, num_workers)
+    match(in_dir, out_dir, match_db_host, meta_db_uri, grobid_host, num_workers)
