@@ -18,15 +18,40 @@ from psycopg2.extras import Json, DictCursor
 
 
 ARXIV_URL_PATT = re.compile(
-    r'arxiv\.org\/[a-z0-9-]{1,10}\/(([a-z0-9-]{1,15}\/)?[\d\.]{4,9}\d)', re.I)
+    r'arxiv\.org\/[a-z0-9-]{1,10}\/(([a-z0-9-]{1,15}\/)?[\d\.]{4,9}\d)',
+    re.I
+)
 ARXIV_ID_PATT = re.compile(
-    r'arXiv:(([a-z0-9-]{1,15}\/)?[\d\.]{4,9}\d)', re.I)
+    r'arXiv:(([a-z0-9-]{1,15}\/)?[\d\.]{4,9}\d)',
+    re.I
+)
 ARXIV_ID_PATT_DATE = re.compile(
-    r'^([a-zA-Z-\.]+)?\/?(\d\d)(\d\d)(.*)$')
+    r'^([a-zA-Z-\.]+)?\/?(\d\d)(\d\d)(.*)$'
+)
 DOI_PATT = re.compile(
-    r'10.\d{4,9}/[-._;()/:A-Z0-9]+$', re.I)
+    # a DOI at the *end* of the string
+    # NOTE: might match a "/" at the end
+    r'10.\d{4,9}/[-._;()/:A-Z0-9]+$',
+    re.I
+)
 FORMULA_PATT = re.compile(
-    r'\{\{formula:.{36}\}\}', re.I)
+    r'\{\{formula:.{36}\}\}',
+    re.I
+)
+APS_DOI_PATT = re.compile(
+    r'('  # either
+    r'(rev\.\s*mod\.\s*phys\.?)'  # rev mod phys  -> g2
+    '|'  # or
+    r'(phys\.\s*rev\.\s*)'  # phys rev  -> g3
+    r')'
+    r'(([a-z]+\.? )+)[.,]?\s*'  # optional sequence of specifiers -> g4
+    #                           # e.g.: <none>, a, b, lett,
+    #                           #       accel beams, spec top phys ed res
+    r'(\d+)\s*'  # issue number  -> g6
+    r'(\([0-9a-z\s,.]+\))?[.,]?\s*'  # naughty year inbetween
+    r'([a-z]?\d+)',  # paper identifier (can contain a leading letter)  -> g8
+    re.I
+)
 
 
 def find_arxiv_id(text):
@@ -41,6 +66,69 @@ def find_arxiv_id(text):
         if match:
             return match.group(1)
     return False
+
+
+def identify_implicit_aps_journal_doi(bibstr):
+    """ Identify DOI information in physics references to
+        Journals of the American Physical Society.
+
+        Example in/outputs:
+
+        H. R. Riedl et al., Phys. Rev. 162, 692 (1967).
+            -> 10.1103/physrev.162.692
+
+        L. Davidovich et al., Phys. Rev. A 50, R895 (1994).
+            -> 10.1103/physreva.50.R895
+
+        Phys. Rev. B 88 (Jul, 2013) 045102
+            -> 10.1103/physrevb.88.045102
+
+        K. Zuza et al., Phys. Rev. Spec. Top. Phys. Ed. Res. 10, 010122 (2014).
+            -> 10.1103/PhysRevSTPER.10.010122
+
+        A. J. Leggett, Rev. Mod. Phys. 73, 307 (2001).
+            -> 10.1103/revmodphys.73.307
+    """
+
+    m = APS_DOI_PATT.search(bibstr)
+    if not m:
+        # no match
+        return None
+
+    aps_doi_numid = '10.1103'
+    rev_mod_phys = m.group(2)
+    phys_rev = m.group(3)
+    issue_number = m.group(6).lower()
+    paper_id = m.group(8).lower()
+    if rev_mod_phys is not None:
+        journal_id = 'revmodphys'
+    elif phys_rev is not None:
+        journal_id = 'physrev'
+    else:
+        # something went wrong
+        raise ValueError
+
+    # post processing of phys rev appendix match
+    phys_rev_spec = ''
+    phys_rev_spec_raw = m.group(4)
+    if phys_rev_spec_raw:
+        phys_rev_spec = re.sub(
+            '[\s.]+',
+            '',
+            phys_rev_spec_raw
+        ).lower()
+        if phys_rev_spec == 'spectopphysedres':
+            phys_rev_spec = 'stper'  # special case
+    # / post processing of phys rev appendix match
+
+    doi = '{}/{}{}.{}.{}'.format(
+        aps_doi_numid,
+        journal_id,
+        phys_rev_spec,
+        issue_number,
+        paper_id
+    )
+    return doi
 
 
 def title_lookup_in_arxiv_metadata_db(arxiv_id, cursor_arxiv, ppr_year, ppr_month):
@@ -352,65 +440,82 @@ def extend_parsed_arxiv_chunk(params):
                                 print(e)
                                 pass
 
-                        # retrieve title from crossref (look for DOI in contained links)
+                        # retrieve title from crossref
+                        # (look for DOI in contained links and try
+                        #  to determine DOI for APS journals)
+                        doi_candidates = []
                         if title is None:
+                            # check contained links
                             if len(json_data['bib_entries'][bib_entry]['contained_links']) != 0:
                                 # multiple urls possible in list
                                 for bib_item_url in json_data['bib_entries'][bib_entry]['contained_links']:
 
-                                    # print('Doi patt search using URL link')
+                                    # print('DOI patt search using URL link')
                                     bib_item_url = json_data['bib_entries'][bib_entry]['contained_links']
                                     for url in bib_item_url:
-                                        try:
-                                            bib_item_doi = DOI_PATT.search(url)
-                                            # print(bib_item_doi)
-                                            if bib_item_doi is not None:
-                                                if len(bib_item_doi[0]) != 0:
+                                        bib_item_doi_m = DOI_PATT.search(url)
+                                        if bib_item_doi_m:
+                                            bib_item_doi = bib_item_doi_m.group(0)
+                                            if bib_item_doi[-1] == '/':
+                                                bib_item_doi = bib_item_doi[:-1]
+                                            doi_candidates.append(
+                                                bib_item_doi
+                                            )
+                            # look for APS references
+                            aps_doi = identify_implicit_aps_journal_doi(
+                                json_data['bib_entries'][bib_entry]['bib_entry_raw']
+                            )
+                            if aps_doi is not None:
+                                doi_candidates = [aps_doi] + doi_candidates
+                            # work with DOIs found
+                            try:
+                                for doi_candi in doi_candidates:
+                                    if title is not None:
+                                        break
+                                    # check whether there's already a title for this DOI in local crossref table
+                                    crossrefdb_title_query = "SELECT * from crossref WHERE doi=%s"
+                                    cursor.execute(crossrefdb_title_query, (doi_candi,))
+                                    crossref_matching_pub = cursor.fetchall()
 
-                                                    # check whether there's already a title for this DOI in local crossref table
-                                                    crossrefdb_title_query = "SELECT * from crossref WHERE doi=%s"
-                                                    cursor.execute(crossrefdb_title_query, (bib_item_doi[0],))
-                                                    crossref_matching_pub = cursor.fetchall()
+                                    if len(crossref_matching_pub) == 1:
+                                        print(
+                                            "[crossref db] Ein passender Eintrag in local crossrefdb gefunden")
+                                        print(crossref_matching_pub[0][1])
+                                        title = crossref_matching_pub[0][1]
+                                        saved_requests_counter += 1
 
-                                                    if len(crossref_matching_pub) == 1:
-                                                        print(
-                                                            "[crossref db] Ein passender Eintrag in local crossrefdb gefunden")
-                                                        print(crossref_matching_pub[0][1])
-                                                        title = crossref_matching_pub[0][1]
-                                                        saved_requests_counter += 1
+                                    elif len(crossref_matching_pub) > 1:
+                                        print(
+                                            "[crossref db] more than one crossref entry for the current doi?! :",
+                                            doi_candi)
+                                        title = crossref_matching_pub[0][1]
+                                        saved_requests_counter += 1
 
-                                                    elif len(crossref_matching_pub) > 1:
-                                                        print(
-                                                            "[crossref db] more than one crossref entry for the current doi?! :",
-                                                            bib_item_doi[0])
-                                                        title = crossref_matching_pub[0][1]
-                                                        saved_requests_counter += 1
+                                    elif len(crossref_matching_pub) == 0:
+                                        print(
+                                            "[crossref db] not in crossref db yet - call API and write to db ")
 
-                                                    elif len(crossref_matching_pub) == 0:
-                                                        print(
-                                                            "[crossref db] not in crossref db yet - call API and write to db ")
+                                        crossref_api_result = find_title_in_crossref_by_doi(
+                                            doi_candi)
+                                        if crossref_api_result is not False:
+                                            print(
+                                                '[crossref API] title found in crossref API - writing to db')
+                                            title = crossref_api_result
 
-                                                        crossref_api_result = find_title_in_crossref_by_doi(
-                                                            bib_item_doi[0])
-                                                        if crossref_api_result is not False:
-                                                            print(
-                                                                '[crossref API] title found in crossref API - writing to db')
-                                                            title = crossref_api_result
-
-                                                            # write title to db
-                                                            cursor.execute(
-                                                                "INSERT INTO crossref (doi, title) VALUES (%s,%s)",
-                                                                (bib_item_doi[0], title))
-                                                            conn.commit()
+                                            # write title to db
+                                            cursor.execute(
+                                                "INSERT INTO crossref (doi, title) VALUES (%s,%s)",
+                                                (doi_candi, title))
+                                            conn.commit()
 
 
-                                        except TypeError as te:
-                                            pass
+                            except TypeError as te:  # FIXME: where would that occurr in the large block above?
+                                pass
 
-                                        # for the unprobable case that two threads look up the title for same DOI
-                                        # at the same time and try to write to table (DOI is primary key)
-                                        except psycopg2.IntegrityError as ie:
-                                            pass
+                            # for the unprobable case that two threads look up the title for same DOI
+                            # at the same time and try to write to table (DOI is primary key)
+                            except psycopg2.IntegrityError as ie:
+                                pass
 
                         # find title with GROBID in ref string
                         if title is None:
