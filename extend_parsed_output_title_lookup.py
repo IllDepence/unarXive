@@ -26,7 +26,7 @@ ARXIV_ID_PATT_DATE = re.compile(
 DOI_PATT = re.compile(
     r'10.\d{4,9}/[-._;()/:A-Z0-9]+$', re.I)
 FORMULA_PATT = re.compile(
-    '\{\{formula:.{36}\}\}', re.I)
+    r'\{\{formula:.{36}\}\}', re.I)
 
 
 def find_arxiv_id(text):
