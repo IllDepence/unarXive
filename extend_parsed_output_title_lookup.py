@@ -250,7 +250,7 @@ def map_ids_from_openalexdb_match_to_dict(matched_pub_from_db):
 
 
 def extend_parsed_arxiv_chunk(params):
-    jsonl_file_path, output_root_dir, match_db_uri, meta_db_uri, grobid_url = params
+    jsonl_file_path, output_root_dir, match_db_host, meta_db_uri, grobid_url = params
     i = 0
     bib_item_counter = 0
     bib_item_no_title_error_counter = 0
@@ -259,7 +259,12 @@ def extend_parsed_arxiv_chunk(params):
     start_time = datetime.now()
 
     # create connection to local openalex database (with openalex and crossref tables)
-    conn = psycopg2.connect(database=match_db_uri)
+    conn = psycopg2.connect(
+        host=match_db_host,
+        database='openalex',
+        user='unarxive_matching',
+        password='over9000bibitems'
+    )
     cursor = conn.cursor()
 
     # connection to local arxiv db for lookup using arxiv ID
@@ -603,10 +608,10 @@ def extend_parsed_arxiv_chunk(params):
     connection_arxiv_db.close()
 
 
-def match(in_dir, out_dir, match_db_uri, meta_db_uri, grobid_url, num_workers):
+def match(in_dir, out_dir, match_db_host, meta_db_uri, grobid_url, num_workers):
     # in_dir = '/opt/unarXive_2022/arxiv_parsed'
     # out_dir = '/opt/unarXive_2022/parsed_data_enriched/'
-    # match_db_uri = 'openalex'
+    # match_db_host = '129.13.152.175'
     # meta_db_uri = '/opt/unarXive_2022/unarXive_code_repo/arxiv-metadata-oai-snapshot_230101.sqlite'
     # grobid_url = 'http://localhost:8070/api/processCitation'
     input_fns_glob_patt = os.path.join(
@@ -623,7 +628,7 @@ def match(in_dir, out_dir, match_db_uri, meta_db_uri, grobid_url, num_workers):
             (
                 input_file_path,
                 out_dir,
-                match_db_uri,
+                match_db_host,
                 meta_db_uri,
                 grobid_url
             )
@@ -641,8 +646,8 @@ if __name__ == '__main__':
 
     in_dir = sys.argv[1]
     out_dir = sys.argv[2]
-    match_db_uri = sys.argv[3]
+    match_db_host = sys.argv[3]
     meta_db_uri = sys.argv[4]
     grobid_url = sys.argv[5]
     num_workers = int(sys.argv[6])
-    match(in_dir, out_dir, match_db_uri, meta_db_uri, grobid_url, num_workers)
+    match(in_dir, out_dir, match_db_host, meta_db_uri, grobid_url, num_workers)
