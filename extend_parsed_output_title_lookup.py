@@ -710,12 +710,13 @@ def extend_parsed_arxiv_chunk(params):
     connection_arxiv_db.close()
 
 
-def match(in_dir, out_dir, match_db_host, meta_db_uri, grobid_host, num_workers):
+def match(
+    in_dir, out_dir, match_db_host, meta_db_uri, grobid_host, num_workers
+):
     # in_dir = '/opt/unarXive_2022/arxiv_parsed'
     # out_dir = '/opt/unarXive_2022/parsed_data_enriched/'
     # match_db_host = '129.13.152.175'
-    # meta_db_uri = '/opt/unarXive_2022/unarXive_code_repo/arxiv-metadata-oai-snapshot_230101.sqlite'
-    # grobid_host = 'http://localhost:8070/api/processCitation'
+    # meta_db_uri = 'arxiv-metadata-oai-snapshot_230101.sqlite'
     # grobid_host = '129.13.152.175'
     input_fns_glob_patt = os.path.join(
         in_dir,     # root dir path
@@ -753,4 +754,6 @@ if __name__ == '__main__':
     meta_db_uri = sys.argv[4]
     grobid_host = sys.argv[5]
     num_workers = int(sys.argv[6])
-    match(in_dir, out_dir, match_db_host, meta_db_uri, grobid_host, num_workers)
+    match(
+        in_dir, out_dir, match_db_host, meta_db_uri, grobid_host, num_workers
+    )
