@@ -178,13 +178,17 @@ def find_title_in_crossref_by_doi(given_doi):
             time.sleep(delta)
     except ValueError:
         pass
+    if resp.status_code == 404:
+        # probably a faulty DOI
+        return False
     try:
         title = resp.json()['message']['title'][0]
         # print(doi_metadata)
         if title and len(title) > 0:
             return title
     except json.decoder.JSONDecodeError:
-        print("JSON decode error")
+        print("JSON decode error in Crossref response")
+        sys.exit()
         return False
 
 
@@ -478,28 +482,17 @@ def extend_parsed_arxiv_chunk(params):
                                     crossref_matching_pub = cursor.fetchall()
 
                                     if len(crossref_matching_pub) == 1:
-                                        print(
-                                            "[crossref db] Ein passender Eintrag in local crossrefdb gefunden")
-                                        print(crossref_matching_pub[0][1])
                                         title = crossref_matching_pub[0][1]
                                         saved_requests_counter += 1
 
                                     elif len(crossref_matching_pub) > 1:
-                                        print(
-                                            "[crossref db] more than one crossref entry for the current doi?! :",
-                                            doi_candi)
                                         title = crossref_matching_pub[0][1]
                                         saved_requests_counter += 1
 
                                     elif len(crossref_matching_pub) == 0:
-                                        print(
-                                            "[crossref db] not in crossref db yet - call API and write to db ")
-
                                         crossref_api_result = find_title_in_crossref_by_doi(
                                             doi_candi)
                                         if crossref_api_result is not False:
-                                            print(
-                                                '[crossref API] title found in crossref API - writing to db')
                                             title = crossref_api_result
 
                                             # write title to db
