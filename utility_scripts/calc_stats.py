@@ -222,20 +222,25 @@ def get_stats_matrix(indices):
     return stats_matrx
 
 
-def add_to_overall_stats(stats_overall, stats_single):
-    """ Aggregate stats for
-            - all papers
-            - papers per fine category
-            - each month
+def print_stats_for_groups(mtrxs, idxs):
+    """ Showcase
     """
 
-    pass
+    # for all the stats currently implemented
+    for stat, mtrx in mtrxs.items():
+        print('\n- - - {} - - -'.format(stat))
+        # for each arXiv group
+        for gk, gi in idxs['grp_to_idx'].items():
+            gn = get_coarse_arxiv_group_name(gk)
+            gi = idxs['grp_to_idx'][gk]
+            # sum up the respective rows over all years
+            stat_val = np.sum(mtrx[gi[0]:gi[-1]+1, :])
+            print('\t{}: {}'.format(gn, stat_val))
 
 
 def calc_stats(root_dir):
     # set up stats data structure
-    stats_matrix_dict_keys = [
-        'num_pprs',
+    ppr_stats_keys = [
         'num_cit_markers',
         'num_cit_markers_linked',
         'num_paras',
@@ -244,7 +249,7 @@ def calc_stats(root_dir):
     ]
     stats_matrix_indices = get_stats_matrix_indices()
     stats_matrix_dict = {}
-    for k in stats_matrix_dict_keys:
+    for k in ppr_stats_keys + ['num_pprs']:
         stats_matrix_dict[k] = get_stats_matrix(stats_matrix_indices)
 
     # go through JSONLs
@@ -253,16 +258,19 @@ def calc_stats(root_dir):
         with open(fp) as f:
             for i, line in enumerate(f):
                 ppr_stats = paper_stats(json.loads(line))
+                # get stats matrix indices
                 cat = ppr_stats['main_fine_cat']
                 mon = ppr_stats['month']
                 cat_m_idx = stats_matrix_indices['cat_to_idx'][cat]
                 mon_m_idx = stats_matrix_indices['mon_to_idx'][mon]
+                # add to ppr count
                 stats_matrix_dict['num_pprs'][cat_m_idx][mon_m_idx] += 1
-                print(fp)
-                return stats_matrix_dict['num_pprs']
-                x = input()
-                if x == 'q':
-                    sys.exit()
+                # add to other keys
+                for stats_key in ppr_stats_keys:
+                    stats_matrix_dict[
+                        stats_key
+                    ][cat_m_idx][mon_m_idx] += ppr_stats[stats_key]
+    return stats_matrix_dict, stats_matrix_indices
 
 
 
@@ -303,5 +311,5 @@ stats structure:
  'month': '2008-01'}
  """
 
-calc_stats('enriched_tmp')
+# calc_stats('enriched_tmp')
 # prep_stats_matrix()
