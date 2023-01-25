@@ -2,6 +2,7 @@ import glob
 import json
 import os
 import sys
+import numpy as np
 from collections import defaultdict
 from arxiv_taxonomy import GROUPS, ARCHIVES, CATEGORIES
 
@@ -59,16 +60,21 @@ def paper_stats(ppr):
     stats = {}
 
     # determine year
-    pid = ppr.get('paper_id', None)
-    if pid is None:
-        year = -1
-    elif pid[0] == '9':
+    pid = ppr.get('paper_id')
+    if '/' in pid:
+        # old format ID
+        pref, pid = pid.split('/')
+    if pid[0] == '9':
         # years 1991–1999
         year = int('19' + pid[:2])
     else:
         # years 2000–2099
         year = int('20' + pid[:2])
-    stats['year'] = year
+    month = pid[2:4]
+    stats['month'] = '{}-{}'.format(
+        year,
+        month
+    )
 
     # determine categories
     main_fine_cat = None
@@ -158,14 +164,69 @@ def paper_stats(ppr):
     return stats
 
 
+def get_stats_matrix_indices(max_year=2022):
+    """ Create inicies for a matrix of dimension
+            num_categories × num_months
+        s.t. all categies in a group and all months in a year
+        have a continuous range of row/column indices.
+    """
+
+    # category axis
+    cat_to_idx = {}
+    grp_to_idx = defaultdict(list)
+    idx = 0
+    for gr_key, gr in GROUPS.items():
+        for arch_key, arch in ARCHIVES.items():
+            if arch['in_group'] != gr_key:
+                continue
+            for cat_key, cat in CATEGORIES.items():
+                if cat['in_archive'] != arch_key:
+                    continue
+                grp_to_idx[gr_key].append(idx)
+                cat_to_idx[cat_key] = idx
+                idx += 1
+    # month axis
+    mon_to_idx = {}
+    year_to_idx = defaultdict(list)
+    jdx = 0
+    for y in range(1991, max_year+1):
+        y_key = str(y)
+        for m in range(1, 13):
+            m_key = '{}-{:02}'.format(y, m)
+            year_to_idx[y_key].append(jdx)
+            mon_to_idx[m_key] = jdx
+            jdx += 1
+    # create indices
+    indices = {
+        'cat_to_idx': cat_to_idx,
+        'grp_to_idx': grp_to_idx,
+        'mon_to_idx': mon_to_idx,
+        'year_to_idx': year_to_idx
+    }
+    return indices
+
+
+def get_stats_matrix(indices):
+    """ Create a zero filled matrix of dimension
+            num_categories × num_months
+        s.t. all categies in a group and all months in a year
+        have a continuous range of row/column indices.
+    """
+
+    stats_matrx = np.zeros(
+        (
+            len(indices['cat_to_idx']),
+            len(indices['mon_to_idx'])
+        )
+    )
+    return stats_matrx
+
+
 def add_to_overall_stats(stats_overall, stats_single):
     """ Aggregate stats for
             - all papers
-            - papers per coarse category
             - papers per fine category
-            - each year (?)
-                -> two dimensional indexing
-                -> mby rely on Pandas for this
+            - each month
     """
 
     pass
@@ -173,23 +234,53 @@ def add_to_overall_stats(stats_overall, stats_single):
 
 def calc_stats(root_dir):
     # set up stats data structure
+    stats_matrix_dict_keys = [
+        'num_pprs',
+        'num_cit_markers',
+        'num_cit_markers_linked',
+        'num_paras',
+        'num_refs',
+        'num_refs_linked'
+    ]
+    stats_matrix_indices = get_stats_matrix_indices()
+    stats_matrix_dict = {}
+    for k in stats_matrix_dict_keys:
+        stats_matrix_dict[k] = get_stats_matrix(stats_matrix_indices)
 
     # go through JSONLs
     glob_patt = os.path.join(root_dir, '*', '*.jsonl')
     for fp in glob.glob(glob_patt):
         with open(fp) as f:
             for i, line in enumerate(f):
-                stats = paper_stats(json.loads(line))
+                ppr_stats = paper_stats(json.loads(line))
+                cat = ppr_stats['main_fine_cat']
+                mon = ppr_stats['month']
+                cat_m_idx = stats_matrix_indices['cat_to_idx'][cat]
+                mon_m_idx = stats_matrix_indices['mon_to_idx'][mon]
+                stats_matrix_dict['num_pprs'][cat_m_idx][mon_m_idx] += 1
                 print(fp)
-                print(i)
-                from pprint import pprint
-                pprint(stats)
+                return stats_matrix_dict['num_pprs']
                 x = input()
                 if x == 'q':
                     sys.exit()
 
 
+
 """
+paragraph types:
+
+defaultdict(<class 'int'>, {'paragraph': 459027, 'list': 8630, 'alt_head': 122, 'picture': 59, 'hi': 9, 'line': 1, 'label': 223, 'item': 553, 'proof': 5462, 'Metadata': 4, 'Reference': 2, 'shadowbox': 2, 'anchor': 13, 'abstract': 2, 'listing': 60, 'References': 6, 'REFERENCES': 1, 'marginpar': 1, 'pic-put': 435, 'theindex': 3, 'ref': 2, 'listoffigures': 1})
+"""
+
+"""
+licenses:
+
+    {"http://arxiv.org/licenses/nonexclusive-distrib/1.0/": 1271367, "http://creativecommons.org/licenses/by/4.0/": 130840, "http://creativecommons.org/licenses/by-nc-sa/4.0/": 17758, "http://creativecommons.org/licenses/by-sa/4.0/": 8031, "http://creativecommons.org/licenses/by/3.0/": 5637, "http://creativecommons.org/licenses/by-nc-sa/3.0/": 4212, "http://creativecommons.org/licenses/publicdomain/": 1834, "http://creativecommons.org/publicdomain/zero/1.0/": 7501, "http://creativecommons.org/licenses/by-nc-nd/4.0/": 17592, "null": 389887}
+"""
+
+"""
+stats structure:
+
 {'coarse_cats': ['grp_physics'],
  'fine_cats': ['astro-ph'],
  'license': None,
@@ -209,7 +300,8 @@ def calc_stats(root_dir):
  'num_paras': 34,
  'num_refs': 30,
  'num_refs_linked': 3,
- 'year': 2008}
+ 'month': '2008-01'}
  """
 
 calc_stats('enriched_tmp')
+# prep_stats_matrix()
