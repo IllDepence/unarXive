@@ -139,13 +139,13 @@ def paper_stats(ppr):
 
     # full text based stats
     num_paras = 0
-    num_para_types = defaultdict(int)
-    num_para_type_paragraph = 0
+    num_para_types = defaultdict(int)  # nice for manual work
+    num_para_type_paragraph = 0  # v easier to aggregate
     num_para_type_listing = 0
     num_para_type_label = 0
     num_para_type_item = 0
     num_para_type_proof = 0
-    num_para_type_pic_put = 0
+    num_para_type_pic_put = 0  # ^ easier to aggregate
     num_cit_markers = 0
     num_cit_markers_linked = 0
     num_refs = 0
@@ -326,6 +326,37 @@ def print_stats_for_years(mtrxs, idxs):
             print('\t{}: {}'.format(yk, stat_val))
 
 
+def get_ref_matching_success(mtrxs, idxs):
+    """ Showcase
+    """
+
+    ref_succ_rates = {}
+    years = list(idxs['year_to_idx'].keys())  # x labels for plot
+    for disc, d_idx in idxs['grp_to_idx'].items():
+        # for each discipline, create a list of ref matching success
+        # rates with one value per year (NOTE: change to month?)
+        ref_succ_rates[disc] = []
+        for year, y_idx in idxs['year_to_idx'].items():
+            num_refs = np.sum(mtrxs['num_refs'][
+                d_idx[0]:  # discipline
+                d_idx[-1],  # slice
+                y_idx[0]:  # year
+                y_idx[-1]  # slice
+            ])
+            num_refs_succ = np.sum(mtrxs['num_refs_linked'][
+                d_idx[0]:
+                d_idx[-1],
+                y_idx[0]:
+                y_idx[-1]
+            ])
+            if num_refs == 0:
+                succ_rate = 0
+            else:
+                succ_rate = num_refs_succ / num_refs
+            ref_succ_rates[disc].append(succ_rate)
+    return ref_succ_rates, years
+
+
 def calc_stats(root_dir):
     """ Calculates a range of stats, each stored in a matrix of dimensions
             num_categories × num_months
@@ -407,21 +438,3 @@ def calc_stats(root_dir):
                         stats_key
                     ][cat_m_idx][mon_m_idx] += ppr_stats[stats_key]
     return stats_matrix_dict, stats_matrix_indices
-
-
-"""
-stats structure:
-
-{
- 'num_non_text_success': defaultdict(<class 'dict'>,
-                                     {'figure': {'fail': 5, 'success': 2},
-                                      'formula': {'fail': 0, 'success': 115},
-                                      'table': {'fail': 0, 'success': 6}}),
- 'num_non_text_types': defaultdict(<class 'int'>,
-                                   {'figure': 2,
-                                    'formula': 115,
-                                    'table': 6}),
- """
-
-# calc_stats('enriched_tmp')
-# prep_stats_matrix()
