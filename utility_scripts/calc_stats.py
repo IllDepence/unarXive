@@ -21,6 +21,39 @@ def get_coarse_arxiv_group_name(grp_id):
     return None
 
 
+def get_license_fine_name(license_url):
+    if license_url is None:
+        return 'no license'
+    if 'http://arxiv.org/licenses/nonexclusive-distrib/' in license_url:
+        return 'arXiv non-exclusive'
+    elif 'http://creativecommons.org/' in license_url:
+        if 'publicdomain' in license_url:
+            return 'Public Domain'
+        url_parts = license_url.split('/')
+        if url_parts[-4] == 'licenses':
+            cc_type = url_parts[-3].upper()
+            cc_version = url_parts[-2]
+            cc_name = ' ' .join([
+                'CC',
+                cc_type,
+                cc_version
+            ])
+            return cc_name
+    return 'unknown license'
+
+
+def get_license_coarse_name(license_url):
+    fine_name = get_license_fine_name(license_url)
+    if fine_name == 'arXiv non-exclusive':
+        return fine_name
+    elif fine_name == 'Public Domain':
+        return fine_name
+    elif fine_name[:2] == 'CC':
+        return 'Creative Commons'
+    else:
+        return fine_name
+
+
 def get_coarse_arxiv_category(cat_id):
     """ In arXiv taxonomy, go
             category -> archive -> group.
@@ -102,7 +135,7 @@ def paper_stats(ppr):
     stats['fine_cats'] = fine_cats
 
     # determine license
-    stats['license'] = ppr.get('metadata', {}).get('license', None)
+    stats['license_url'] = ppr.get('metadata', {}).get('license', None)
 
     # full text based stats
     num_paras = 0
@@ -206,7 +239,7 @@ def get_stats_matrix_indices(max_year=2022):
     return indices
 
 
-def get_stats_matrix(indices):
+def get_empty_stats_matrix(indices):
     """ Create a zero filled matrix of dimension
             num_categories × num_months
         s.t. all categies in a group and all months in a year
@@ -226,19 +259,53 @@ def print_stats_for_groups(mtrxs, idxs):
     """ Showcase
     """
 
-    # for all the stats currently implemented
+    # for all the stats available
     for stat, mtrx in mtrxs.items():
         print('\n- - - {} - - -'.format(stat))
         # for each arXiv group
         for gk, gi in idxs['grp_to_idx'].items():
             gn = get_coarse_arxiv_group_name(gk)
-            gi = idxs['grp_to_idx'][gk]
             # sum up the respective rows over all years
             stat_val = np.sum(mtrx[gi[0]:gi[-1]+1, :])
             print('\t{}: {}'.format(gn, stat_val))
 
 
+def print_stats_for_years(mtrxs, idxs):
+    """ Showcase
+    """
+
+    # for all the stats available
+    for stat, mtrx in mtrxs.items():
+        print('\n- - - {} - - -'.format(stat))
+        # for each year
+        for yk, yi in idxs['year_to_idx'].items():
+            # sum up the respective rows over all categories
+            stat_val = np.sum(mtrx[:, yi[0]:yi[-1]+1])
+            print('\t{}: {}'.format(yk, stat_val))
+
+
 def calc_stats(root_dir):
+    """ Calculates a range of stats, each stored in a matrix of dimensions
+            num_categories × num_months
+        where consecutive sections of rows/columns are category groups/years.
+
+        Toy example:
+                            2017                           2018
+                        ----- ^ --------------. .------------^-------- - -
+                        2017-10 2017-11 2017-12 2018-01 2018-02 2018-03 ...
+             /  cs.CL         0       1       2       3       4       5
+         cs -|  cs.LG         6       7       8       9       0       1
+             \  cs.IT         2       3       4       5       6       7
+             /  hep-ph        6       7       0       1       2       1
+             |  hep-th        9       0       1       3       4       5
+        phys-|  gr-qc         2       3       4       5       6       7
+             |  ...
+
+
+        For each statistical value (num papers, num references, etc.) one
+        such matrix is created.
+    """
+
     # set up stats data structure
     ppr_stats_keys = [
         'num_cit_markers',
@@ -249,8 +316,16 @@ def calc_stats(root_dir):
     ]
     stats_matrix_indices = get_stats_matrix_indices()
     stats_matrix_dict = {}
-    for k in ppr_stats_keys + ['num_pprs']:
-        stats_matrix_dict[k] = get_stats_matrix(stats_matrix_indices)
+    aggregrate_only_keys = [
+        'num_pprs',
+        'num_license_arxiv_non-exclusive',
+        'num_license_public_domain',
+        'num_license_creative_commons',
+        'num_license_no_license',
+        'num_license_unknown_license'
+    ]
+    for k in ppr_stats_keys + aggregrate_only_keys:
+        stats_matrix_dict[k] = get_empty_stats_matrix(stats_matrix_indices)
 
     # go through JSONLs
     glob_patt = os.path.join(root_dir, '*', '*.jsonl')
@@ -265,6 +340,13 @@ def calc_stats(root_dir):
                 mon_m_idx = stats_matrix_indices['mon_to_idx'][mon]
                 # add to ppr count
                 stats_matrix_dict['num_pprs'][cat_m_idx][mon_m_idx] += 1
+                # add license counts
+                license_stats_key = 'num_license_{}'.format(
+                    get_license_coarse_name(
+                        ppr_stats['license_url']
+                    ).replace(' ', '_').lower()
+                )
+                stats_matrix_dict[license_stats_key][cat_m_idx][mon_m_idx] += 1
                 # add to other keys
                 for stats_key in ppr_stats_keys:
                     stats_matrix_dict[
@@ -273,17 +355,10 @@ def calc_stats(root_dir):
     return stats_matrix_dict, stats_matrix_indices
 
 
-
 """
 paragraph types:
 
 defaultdict(<class 'int'>, {'paragraph': 459027, 'list': 8630, 'alt_head': 122, 'picture': 59, 'hi': 9, 'line': 1, 'label': 223, 'item': 553, 'proof': 5462, 'Metadata': 4, 'Reference': 2, 'shadowbox': 2, 'anchor': 13, 'abstract': 2, 'listing': 60, 'References': 6, 'REFERENCES': 1, 'marginpar': 1, 'pic-put': 435, 'theindex': 3, 'ref': 2, 'listoffigures': 1})
-"""
-
-"""
-licenses:
-
-    {"http://arxiv.org/licenses/nonexclusive-distrib/1.0/": 1271367, "http://creativecommons.org/licenses/by/4.0/": 130840, "http://creativecommons.org/licenses/by-nc-sa/4.0/": 17758, "http://creativecommons.org/licenses/by-sa/4.0/": 8031, "http://creativecommons.org/licenses/by/3.0/": 5637, "http://creativecommons.org/licenses/by-nc-sa/3.0/": 4212, "http://creativecommons.org/licenses/publicdomain/": 1834, "http://creativecommons.org/publicdomain/zero/1.0/": 7501, "http://creativecommons.org/licenses/by-nc-nd/4.0/": 17592, "null": 389887}
 """
 
 """
