@@ -140,6 +140,12 @@ def paper_stats(ppr):
     # full text based stats
     num_paras = 0
     num_para_types = defaultdict(int)
+    num_para_type_paragraph = 0
+    num_para_type_listing = 0
+    num_para_type_label = 0
+    num_para_type_item = 0
+    num_para_type_proof = 0
+    num_para_type_pic_put = 0
     num_cit_markers = 0
     num_cit_markers_linked = 0
     num_refs = 0
@@ -160,6 +166,18 @@ def paper_stats(ppr):
     for para in ppr.get('body_text', []):
         num_paras += 1
         num_para_types[para['content_type']] += 1
+        if para['content_type'] == 'paragraph':
+            num_para_type_paragraph += 1
+        elif para['content_type'] == 'listing':
+            num_para_type_listing += 1
+        elif para['content_type'] == 'label':
+            num_para_type_label += 1
+        elif para['content_type'] == 'item':
+            num_para_type_item += 1
+        elif para['content_type'] == 'proof':
+            num_para_type_proof += 1
+        elif para['content_type'] == 'pic-put':
+            num_para_type_pic_put += 1
         for cit in para['cite_spans']:
             # for each reference
             ref_id = cit['ref_id']
@@ -172,6 +190,12 @@ def paper_stats(ppr):
             if open_alex_id is not None:
                 num_cit_markers_linked += num_mrkrs
     stats['num_paras'] = num_paras
+    stats['num_para_type_paragraph'] = num_para_type_paragraph
+    stats['num_para_type_listing'] = num_para_type_listing
+    stats['num_para_type_label'] = num_para_type_label
+    stats['num_para_type_item'] = num_para_type_item
+    stats['num_para_type_proof'] = num_para_type_proof
+    stats['num_para_type_pic_put'] = num_para_type_pic_put
     stats['num_para_types'] = num_para_types
     stats['num_cit_markers'] = num_cit_markers
     stats['num_cit_markers_linked'] = num_cit_markers_linked
@@ -310,9 +334,15 @@ def calc_stats(root_dir):
     ppr_stats_keys = [
         'num_cit_markers',
         'num_cit_markers_linked',
-        'num_paras',
         'num_refs',
-        'num_refs_linked'
+        'num_refs_linked',
+        'num_paras',
+        'num_para_type_paragraph',
+        'num_para_type_listing',
+        'num_para_type_label',
+        'num_para_type_item',
+        'num_para_type_proof',
+        'num_para_type_pic_put'
     ]
     stats_matrix_indices = get_stats_matrix_indices()
     stats_matrix_dict = {}
@@ -354,12 +384,6 @@ def calc_stats(root_dir):
                     ][cat_m_idx][mon_m_idx] += ppr_stats[stats_key]
     return stats_matrix_dict, stats_matrix_indices
 
-
-"""
-paragraph types:
-
-defaultdict(<class 'int'>, {'paragraph': 459027, 'list': 8630, 'alt_head': 122, 'picture': 59, 'hi': 9, 'line': 1, 'label': 223, 'item': 553, 'proof': 5462, 'Metadata': 4, 'Reference': 2, 'shadowbox': 2, 'anchor': 13, 'abstract': 2, 'listing': 60, 'References': 6, 'REFERENCES': 1, 'marginpar': 1, 'pic-put': 435, 'theindex': 3, 'ref': 2, 'listoffigures': 1})
-"""
 
 """
 stats structure:
