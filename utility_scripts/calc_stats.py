@@ -217,6 +217,24 @@ def paper_stats(ppr):
             num_non_text_success[nt_type]['success'] += 1
     stats['num_non_text_types'] = num_non_text_types
     stats['num_non_text_success'] = num_non_text_success
+    stats['num_fig_succs'] = num_non_text_success['figure'].get(
+        'success', 0
+    )
+    stats['num_fig_fails'] = num_non_text_success['figure'].get(
+        'fail', 0
+    )
+    stats['num_tbl_succs'] = num_non_text_success['table'].get(
+        'success', 0
+    )
+    stats['num_tbl_fails'] = num_non_text_success['table'].get(
+        'fail', 0
+    )
+    stats['num_formula_succs'] = num_non_text_success['formula'].get(
+        'success', 0
+    )
+    stats['num_formula_fails'] = num_non_text_success['formula'].get(
+        'fail', 0
+    )
 
     return stats
 
@@ -342,7 +360,13 @@ def calc_stats(root_dir):
         'num_para_type_label',
         'num_para_type_item',
         'num_para_type_proof',
-        'num_para_type_pic_put'
+        'num_para_type_pic_put',
+        'num_fig_succs',
+        'num_fig_fails',
+        'num_tbl_succs',
+        'num_tbl_fails',
+        'num_formula_succs',
+        'num_formula_fails'
     ]
     stats_matrix_indices = get_stats_matrix_indices()
     stats_matrix_dict = {}
@@ -388,13 +412,7 @@ def calc_stats(root_dir):
 """
 stats structure:
 
-{'coarse_cats': ['grp_physics'],
- 'fine_cats': ['astro-ph'],
- 'license': None,
- 'main_coarse_cat': 'grp_physics',
- 'main_fine_cat': 'astro-ph',
- 'num_cit_markers': 32,
- 'num_cit_markers_linked': 3,
+{
  'num_non_text_success': defaultdict(<class 'dict'>,
                                      {'figure': {'fail': 5, 'success': 2},
                                       'formula': {'fail': 0, 'success': 115},
@@ -403,11 +421,6 @@ stats structure:
                                    {'figure': 2,
                                     'formula': 115,
                                     'table': 6}),
- 'num_para_types': defaultdict(<class 'int'>, {'paragraph': 34}),
- 'num_paras': 34,
- 'num_refs': 30,
- 'num_refs_linked': 3,
- 'month': '2008-01'}
  """
 
 # calc_stats('enriched_tmp')
