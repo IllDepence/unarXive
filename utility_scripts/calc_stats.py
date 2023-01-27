@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import numpy as np
+import matplotlib.pyplot as plt
 from collections import defaultdict
 from arxiv_taxonomy import GROUPS, ARCHIVES, CATEGORIES
 
@@ -326,8 +327,13 @@ def print_stats_for_years(mtrxs, idxs):
             print('\t{}: {}'.format(yk, stat_val))
 
 
-def get_ref_matching_success(mtrxs, idxs):
-    """ Showcase
+def get_cats_over_years_plot_data_quota(mtrxs, idxs, part_key, total_key):
+    """ Showcase of data generation for plots that show one stat
+        divided by another for each coarse discipline across the years.
+
+        With e.g.
+        part_key='num_refs_linked'
+        total_key='num_refs'
     """
 
     ref_succ_rates = {}
@@ -337,24 +343,40 @@ def get_ref_matching_success(mtrxs, idxs):
         # rates with one value per year (NOTE: change to month?)
         ref_succ_rates[disc] = []
         for year, y_idx in idxs['year_to_idx'].items():
-            num_refs = np.sum(mtrxs['num_refs'][
-                d_idx[0]:  # discipline
-                d_idx[-1],  # slice
+            val_total = np.sum(mtrxs[total_key][
+                d_idx[0]:  # \discipline
+                d_idx[-1],  # |slice
                 y_idx[0]:  # year
                 y_idx[-1]  # slice
             ])
-            num_refs_succ = np.sum(mtrxs['num_refs_linked'][
+            val_part = np.sum(mtrxs[part_key][
                 d_idx[0]:
                 d_idx[-1],
                 y_idx[0]:
                 y_idx[-1]
             ])
-            if num_refs == 0:
-                succ_rate = 0
+            if val_total == 0:
+                quota = 0
             else:
-                succ_rate = num_refs_succ / num_refs
-            ref_succ_rates[disc].append(succ_rate)
+                quota = val_part / val_total
+            ref_succ_rates[disc].append(quota)
     return ref_succ_rates, years
+
+
+def demoplot():
+    matrices, indices = calc_stats('enriched_tmp')
+    succs, yrs = get_cats_over_years_plot_data_quota(
+        matrices,
+        indices,
+        'num_refs_linked',
+        'num_refs'
+    )
+    for gk, vals in succs.items():
+        gn = get_coarse_arxiv_group_name(gk)
+        plt.plot(yrs, vals, label=gn)
+
+    plt.legend()
+    plt.show()
 
 
 def calc_stats(root_dir):
