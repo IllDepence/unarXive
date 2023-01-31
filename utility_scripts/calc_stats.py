@@ -1,4 +1,3 @@
-import glob
 import json
 import os
 import sys
@@ -435,8 +434,16 @@ def calc_stats(root_dir):
         stats_matrix_dict[k] = get_empty_stats_matrix(stats_matrix_indices)
 
     # go through JSONLs
-    glob_patt = os.path.join(root_dir, '*', '*.jsonl')
-    for fp in glob.glob(glob_patt):
+    jsonl_fps = []
+    for path_to_file, subdirs, files in os.walk(root_dir):
+        for fn in files:
+            fn_base, ext = os.path.splitext(fn)
+            if ext == '.jsonl':
+                fp = os.path.join(path_to_file, fn)
+                if os.path.getsize(fp) > 0:
+                    jsonl_fps.append(fp)
+    print('found {} JSONLs to parse'.format(len(jsonl_fps)))
+    for fp in jsonl_fps:
         with open(fp) as f:
             for i, line in enumerate(f):
                 ppr_stats = paper_stats(json.loads(line))
@@ -460,3 +467,7 @@ def calc_stats(root_dir):
                         stats_key
                     ][cat_m_idx][mon_m_idx] += ppr_stats[stats_key]
     return stats_matrix_dict, stats_matrix_indices
+
+
+if __name__ == '__main__':
+    pass
