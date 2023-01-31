@@ -378,7 +378,7 @@ def demoplot():
     plt.show()
 
 
-def calc_stats(root_dir):
+def calc_stats(root_dir, force_calc=False):
     """ Calculates a range of stats, each stored in a matrix of dimensions
             num_categories × num_months
         where consecutive sections of rows/columns are category groups/years.
@@ -398,7 +398,18 @@ def calc_stats(root_dir):
 
         For each statistical value (num papers, num references, etc.) one
         such matrix is created.
+
+        Returns
+            stats matrices
+            stats matrix indices
     """
+
+    # use pre-calculated stats if possible
+    if not force_calc:
+        precalc_stats = load_from_disk()
+        if precalc_stats is not None:
+            stats_matrix_dict, stats_matrix_indices = precalc_stats
+            return stats_matrix_dict, stats_matrix_indices
 
     # set up stats data structure
     ppr_stats_keys = [
@@ -466,8 +477,102 @@ def calc_stats(root_dir):
                     stats_matrix_dict[
                         stats_key
                     ][cat_m_idx][mon_m_idx] += ppr_stats[stats_key]
+
+    # save to disk for re-use
+    save_to_disk(stats_matrix_dict, stats_matrix_indices)
+
+    return stats_matrix_dict, stats_matrix_indices
+
+
+def get_save_dir():
+    return 'stats'
+
+
+def get_save_matrix_prefix():
+    return 'stats_'
+
+
+def get_save_index_prefix():
+    return 'stats_idx'
+
+
+def get_stats_matrix_fn(dict_key):
+    fn = '{}{}{}npy'.format(
+        get_save_matrix_prefix(),
+        dict_key,
+        os.path.extsep
+    )
+    return fn
+
+
+def get_stats_index_fn(dict_key):
+    fn = '{}{}{}json'.format(
+        get_save_index_prefix,
+        dict_key,
+        os.path.extsep
+    )
+    return fn
+
+
+def save_to_disk(stats_matrix_dict, stats_matrix_indices):
+    """ Save stats to disk.
+    """
+
+    save_dir = get_save_dir()
+
+    print('persisting stats in `{}`'.format(save_dir))
+
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    # persist matrices
+    for dict_key, np_arr in stats_matrix_dict.items():
+        fn = get_stats_matrix_fn(dict_key)
+        fp = os.path.join(save_dir, fn)
+        np.save(fp, np_arr)
+
+    # persist indices
+    for dict_key, index_dict in stats_matrix_indices.items():
+        fn = get_stats_index_fn(dict_key)
+        fp = os.path.join(save_dir, fn)
+        with open(fp, 'w') as f:
+            json.dump(index_dict, f)
+
+
+def load_from_disk():
+    """ Load stats from disk if previously persisted.
+    """
+
+    stats_matrix_dict = {}
+    stats_matrix_indices = {}
+
+    save_dir = get_save_dir()
+    if not os.path.exists(save_dir):
+        return None
+    print('loading previously persisted stats from disk')
+    for fn in os.listdir(save_dir):
+        fp = os.path.join(save_dir, fn)
+        fn_base, ext = os.path.splitext(fn)
+        if ext == '.npy':
+            # load matrix
+            dict_key = fn_base.replace(
+                get_save_matrix_prefix(), ''
+            )
+            stats_matrix_dict[dict_key] = np.load(fp)
+        elif ext == '.json':
+            # load index
+            dict_key = fn_base.replace(
+                get_save_index_prefix(), ''
+            )
+            with open(fp) as f:
+                stats_matrix_indices[dict_key] = json.load(f)
+
     return stats_matrix_dict, stats_matrix_indices
 
 
 if __name__ == '__main__':
-    pass
+    if len(sys.argv) != 2:
+        print('Usage: calc_stats.py <root_dir>')
+        sys.exit()
+    root_dir = sys.argv[1]
+    mtrs, idxs = calc_stats(root_dir)
