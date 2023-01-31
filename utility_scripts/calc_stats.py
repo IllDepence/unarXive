@@ -326,9 +326,12 @@ def print_stats_for_years(mtrxs, idxs):
             print('\t{}: {}'.format(yk, stat_val))
 
 
-def get_cats_over_years_plot_data_quota(mtrxs, idxs, part_key, total_key):
-    """ Showcase of data generation for plots that show one stat
-        divided by another for each coarse discipline across the years.
+def get_cats_over_years_plot_data(mtrxs, idxs, part_key, total_key=None):
+    """ Showcase of data generation for plots that show
+            - a certain stat
+        or
+            - one stat divided by another
+        for each coarse discipline across the years.
 
         With e.g.
         part_key='num_refs_linked'
@@ -342,36 +345,52 @@ def get_cats_over_years_plot_data_quota(mtrxs, idxs, part_key, total_key):
         # rates with one value per year (NOTE: change to month?)
         ref_succ_rates[disc] = []
         for year, y_idx in idxs['year_to_idx'].items():
-            val_total = np.sum(mtrxs[total_key][
-                d_idx[0]:  # \discipline
-                d_idx[-1],  # |slice
-                y_idx[0]:  # year
-                y_idx[-1]  # slice
-            ])
             val_part = np.sum(mtrxs[part_key][
                 d_idx[0]:
                 d_idx[-1],
                 y_idx[0]:
                 y_idx[-1]
             ])
-            if val_total == 0:
-                quota = 0
+            if total_key is None:
+                # nothing to divide by
+                stats_val = val_part
             else:
-                quota = val_part / val_total
-            ref_succ_rates[disc].append(quota)
+                # divite by a total
+                val_total = np.sum(mtrxs[total_key][
+                    d_idx[0]:  # \discipline
+                    d_idx[-1],  # |slice
+                    y_idx[0]:  # year
+                    y_idx[-1]  # slice
+                ])
+                if val_total == 0:
+                    quota = 0
+                else:
+                    quota = val_part / val_total
+                stats_val = quota
+            ref_succ_rates[disc].append(stats_val)
     return ref_succ_rates, years
 
 
-def demoplot():
+def demoplot(stat1_key=None, stat2_key=None, mayor_only=False):
+    mayors = [
+        'Physics', 'Mathematics', 'Computer Science'
+    ]
+    if stat1_key is None and stat2_key is None:
+        stat1_key = 'num_refs_linked'
+        stat2_key = 'num_refs'
+    elif stat2_key is None:
+        stat1_key = 'num_pprs'
     matrices, indices = calc_stats('enriched_tmp')
-    succs, yrs = get_cats_over_years_plot_data_quota(
+    succs, yrs = get_cats_over_years_plot_data(
         matrices,
         indices,
-        'num_refs_linked',
-        'num_refs'
+        stat1_key,
+        stat2_key
     )
     for gk, vals in succs.items():
         gn = get_coarse_arxiv_group_name(gk)
+        if mayor_only and gn not in mayors:
+            continue
         plt.plot(yrs, vals, label=gn)
 
     plt.legend()
@@ -457,12 +476,21 @@ def calc_stats(root_dir, force_calc=False):
     for fp in jsonl_fps:
         with open(fp) as f:
             for i, line in enumerate(f):
-                ppr_stats = paper_stats(json.loads(line))
+                ppr = json.loads(line)
+                ppr_stats = paper_stats(ppr)
                 # get stats matrix indices
                 cat = ppr_stats['main_fine_cat']
                 mon = ppr_stats['month']
-                cat_m_idx = stats_matrix_indices['cat_to_idx'][cat]
-                mon_m_idx = stats_matrix_indices['mon_to_idx'][mon]
+                try:
+                    cat_m_idx = stats_matrix_indices['cat_to_idx'][cat]
+                except KeyError:
+                    print(
+                        'main_fine_cat of {} is {}. skipping'.format(
+                            ppr['paper_id'], cat
+                        )
+                    )
+                    continue
+                    mon_m_idx = stats_matrix_indices['mon_to_idx'][mon]
                 # add to ppr count
                 stats_matrix_dict['num_pprs'][cat_m_idx][mon_m_idx] += 1
                 # add license counts
@@ -507,7 +535,7 @@ def get_stats_matrix_fn(dict_key):
 
 def get_stats_index_fn(dict_key):
     fn = '{}{}{}json'.format(
-        get_save_index_prefix,
+        get_save_index_prefix(),
         dict_key,
         os.path.extsep
     )
