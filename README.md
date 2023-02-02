@@ -9,6 +9,22 @@ Further links
 * [Article in *Scientometrics*](http://link.springer.com/article/10.1007/s11192-020-03382-z)
 * [Data Set on Zenodo](https://doi.org/10.5281/zenodo.2553522)
 
+## Development status
+
+We are currently working on an **updated version** of unarXive containing all arXiv.org submissions from **1991–2022**.
+
+* **Data format**
+    * now very close to that [S2ORC](https://github.com/allenai/s2orc), for easier adoption
+    * documents structured into paragraphs
+    * reference links directly with the paper instead of in an external database
+* **New content**
+    * mathematical notation preserved as LaTeX
+    * captions of figures and tables
+    * [metadata](https://www.kaggle.com/datasets/Cornell-University/) directly included for easier filtering
+    * references linked to [OpenAlex](https://openalex.org/)
+
+**More info**, a preleminary data sample, etc. [can be found here](README_update_2022.md).
+
 ## Usage
 
 The unarXive data set contains
