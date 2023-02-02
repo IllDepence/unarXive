@@ -23,7 +23,7 @@ We are currently working on an **updated version** of unarXive containing all ar
     * [metadata](https://www.kaggle.com/datasets/Cornell-University/) directly included for easier filtering
     * references linked to [OpenAlex](https://openalex.org/)
 
-**More info**, a preleminary data sample, etc. [can be found here](README_update_2022.md).
+**More info**, a preleminary data sample, etc. [can be found here](README_update2022.md).
 
 ## Usage
 
