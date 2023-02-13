@@ -718,16 +718,35 @@ def match(
     # match_db_host = '129.13.152.175'
     # meta_db_uri = 'arxiv-metadata-oai-snapshot_230101.sqlite'
     # grobid_host = '129.13.152.175'
-    input_fns_glob_patt = os.path.join(
-        in_dir,     # root dir path
-        '*',        # year dir
-        '*.jsonl'   # JSONl files
-    )
 
-    # collect all .jsonl chunks to iterate over with multiple workers
-    # (see no. of CPU THREADS above)
+    # get list of JSONLs already processed
+    matching_log_dir = 'logs'
+    matching_log_suffix = '-matching-log.json'
+    matching_log_dir_path = os.path.join(out_dir, matching_log_dir)
+    done_fns = []
+    if os.path.exists(matching_log_dir_path):
+        for fn in os.listdir(matching_log_dir_path):
+            done_fns.append(
+                fn.replace(matching_log_suffix, '')
+            )
+
+    # get list of JSONLs to process
+    todo_fps = []
+    done_fns_found = []
+    for path_to_file, subdirs, files in os.walk(in_dir):
+        for fn in files:
+            fn_base, ext = os.path.splitext(fn)
+            if ext == '.jsonl':
+                # skip those already processed
+                if fn in done_fns:
+                    done_fns_found.append(fn)
+                    continue
+                fp = os.path.join(path_to_file, fn)
+                todo_fps.append(fp)
+
+    # create work param packaged for individual workers
     worker_params = []
-    for input_file_path in glob.glob(input_fns_glob_patt):
+    for input_file_path in todo_fps:
         worker_params.append(
             (
                 input_file_path,
@@ -737,6 +756,13 @@ def match(
                 grobid_host
             )
         )
+
+    # print((
+    #     f'{len(done_fns)} JSONLs already processed'
+    #     f' ({len(done_fns_found)} found)\n'
+    #     f'{len(todo_fps)} JSONLs to process'
+    # ))
+    # sys.exit()
 
     pool = Pool(num_workers, maxtasksperchild=5)
     pool.map(extend_parsed_arxiv_chunk, worker_params)
