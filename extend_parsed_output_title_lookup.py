@@ -198,6 +198,9 @@ def find_title_with_grobid_in_string(grobid_host, bib_ref_string):
 
     if response.status_code == 200:
         return response.text
+    elif response.status_code == 204:
+        # no content could be extracted and structured
+        return False
     else:
         print('GROBID non 200 response:')
         print('\tstatus_code: {}'.format(response.status_code))
