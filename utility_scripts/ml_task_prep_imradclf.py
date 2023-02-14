@@ -4,7 +4,7 @@ import pprint
 import re
 import sys
 import unicodeit
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 
 mathfont_patt = re.compile(
@@ -183,23 +183,23 @@ def prep(root_dir):
                                 counts['_tooshort'] += 1
                             else:
                                 counts[label] += 1
-                                ml_smpl = {
-                                        'text': para_prepd,
+                                ml_smpl = OrderedDict({
+                                        'orig_sec': sec_pre,
                                         'label': label,
-                                        'orig_sec': sec_pre
-                                }
+                                        'text': para_prepd
+                                })
                                 ml_smpls.append(ml_smpl)
-                    ml_smpl_packets.append(
-                        {
-                            'year': get_paper_year(ppr),
-                            'cat': main_cat,
+                    ml_smpl_packet = OrderedDict({
+                            'year': get_paper_year(ppr),  # for stratified
+                            'cat': main_cat,              # sampling
                             'smpls': ml_smpls.copy()
-                        }
-                    )
-                    pprint.pprint(ml_smpls)
-                    x = input()
-                    if x == 'q':
-                        sys.exit()
+                        })
+                    ml_smpl_packets.append(ml_smpl_packet)
+
+    # TODO:
+    # - make stratified tain/test/val splits
+    # - persist
+
     print(f'{cs} CS papers\n{nocs} non CS papers')
     pprint.pprint(counts)
     print(f'{imrad_paras} IMRaDR papras')
