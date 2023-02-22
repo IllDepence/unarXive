@@ -88,7 +88,7 @@ def get_paper_year(ppr):
     return year
 
 
-def prep_para(ppr, para):
+def prep_para(ppr, para, nice_math=False):
     """ For a single paragraph.
     """
 
@@ -97,7 +97,9 @@ def prep_para(ppr, para):
     for ref_span in para['ref_spans']:
         rid = ref_span['ref_id']
         ref_entry = ppr['ref_entries'][rid]
-        if ref_entry['type'] == 'formula':
+        if nice_math and ref_entry['type'] == 'formula':
+            # TODO: test latex2mathml as alternative
+            #       b/c unicodeit is sloooow
             # unicodeit based replacement
             math_unicode = unicodeit.replace(
                 ref_entry['latex']
@@ -175,89 +177,85 @@ def prep(root_dir):
                 fp = os.path.join(path_to_file, fn)
                 if os.path.getsize(fp) > 0:
                     jsonl_fps.append(fp)
-    cs = 0
-    nocs = 0
     imrad_paras = 0
-    ml_smpl_packets = []
+    imrad_smpl_packets = []
+    citrec_smpl_packets = []
     # go through JSONLs
-    for fp in jsonl_fps:
+    for i, fp in enumerate(jsonl_fps):
+        print(f'{i}/{len(jsonl_fps)}')
         with open(fp) as f:
-            for line_num, line in enumerate(f):
+            lines = f.readlines()
+            for line_num, line in enumerate(lines):
                 # process paper
-                ml_smpls = []
+                imrad_smpls = []
+                citrec_smpls = []
                 ppr = json.loads(line)
                 main_cat = ppr['metadata']['categories'].split(' ')[-1]
-                if not main_cat.startswith('cs.'):
-                    nocs += 1
-                else:
-                    cs += 1
-                    for para_num, para in enumerate(ppr['body_text']):
-                        sec_pre = para.get('section', '')
-                        if sec_pre is None:
-                            sec_pre = ''
-                        sec_clean = sec_pre.strip().lower().replace(
-                            '.', ''
-                        )
-                        label = None
-                        if sec_clean in alloc_map['introduction']:
-                            label = 'i'
-                        elif sec_clean in alloc_map['methods']:
-                            label = 'm'
-                        elif sec_clean in alloc_map['results']:
-                            label = 'r'
-                        elif sec_clean in alloc_map['discussion']:
-                            label = 'd'
-                        elif sec_clean in alloc_map['related work']:
-                            label = 'w'
+                for para_num, para in enumerate(ppr['body_text']):
+                    # process paragraph
+                    para_prepd, cit_mrk_links = prep_para(ppr, para)
+                    # create IMRaD classification task data
+                    sec_pre = para.get('section', '')
+                    if sec_pre is None:
+                        sec_pre = ''
+                    sec_clean = sec_pre.strip().lower().replace(
+                        '.', ''
+                    )
+                    label = None
+                    if sec_clean in alloc_map['introduction']:
+                        label = 'i'
+                    elif sec_clean in alloc_map['methods']:
+                        label = 'm'
+                    elif sec_clean in alloc_map['results']:
+                        label = 'r'
+                    elif sec_clean in alloc_map['discussion']:
+                        label = 'd'
+                    elif sec_clean in alloc_map['related work']:
+                        label = 'w'
+                    else:
+                        counts['_noclass'] += 1
+                    if label is not None:
+                        imrad_paras += 1
+                        if len(para_prepd) < 200:
+                            counts['_tooshort'] += 1
                         else:
-                            counts['_noclass'] += 1
-                        if label is not None:
-                            imrad_paras += 1
-                            para_prepd, cit_mrk_links = prep_para(ppr, para)
-                            if len(para_prepd) < 200:
-                                counts['_tooshort'] += 1
-                            else:
-                                counts[label] += 1
-                                ml_smpl = OrderedDict({
-                                        'orig_sec': sec_pre,
-                                        'label': label,
-                                        'text': para_prepd
-                                })
-                                ml_smpls.append(ml_smpl)
-                                if len(cit_mrk_links) > 0:
-                                    print(para_prepd)
-                                    pprint.pprint(cit_mrk_links)
-                                    x = input()
-                                    if x == 'q':
-                                        sys.exit()
-                                    elif x == 'w':
-                                        with open(
-                                            'ml_task_citrec_{}-{}-{}.json'.format(
-                                                ppr['paper_id'].replace(
-                                                    '/', ''
-                                                ),
-                                                line_num,
-                                                para_num
-                                            ),
-                                            'w'
-                                        ) as fo:
-                                            smpl = OrderedDict({
-                                                'context': para_prepd,
-                                                'citations': cit_mrk_links
-                                            })
-                                            json.dump(smpl, fo)
-                    ml_smpl_packet = OrderedDict({
+                            counts[label] += 1
+                            imrad_smpl = OrderedDict({
+                                    'orig_sec': sec_pre,
+                                    'label': label,
+                                    'text': para_prepd
+                            })
+                            imrad_smpls.append(imrad_smpl)
+                    # create citation recommedation classification task data
+                    sec_pre = para.get('section', '')
+                    if len(cit_mrk_links) > 0:
+                        citrec_smpl = OrderedDict({
+                            'context': para_prepd,
+                            'citations': cit_mrk_links
+                        })
+                        citrec_smpls.append(citrec_smpl)
+                # pack all of samples from one paper
+                if len(imrad_smpls) > 0:
+                    imrad_smpl_packet = OrderedDict({
                             'year': get_paper_year(ppr),  # for stratified
                             'cat': main_cat,              # sampling
-                            'smpls': ml_smpls.copy()
+                            'imrad_smpls': imrad_smpls.copy(),
                         })
-                    ml_smpl_packets.append(ml_smpl_packet)
+                    imrad_smpl_packets.append(imrad_smpl_packet)
+                if len(citrec_smpls) > 0:
+                    citrec_smpl_packet = OrderedDict({
+                            'year': get_paper_year(ppr),  # for stratified
+                            'cat': main_cat,              # sampling
+                            'citrec_smpls': citrec_smpls.copy()
+                        })
+                    citrec_smpl_packets.append(citrec_smpl_packet)
 
+    print(len(imrad_smpl_packets))
+    print(len(citrec_smpl_packets))
     # TODO:
     # - make stratified tain/test/val splits
     # - persist
 
-    print(f'{cs} CS papers\n{nocs} non CS papers')
     pprint.pprint(counts)
     print(f'{imrad_paras} IMRaDR papras')
 
