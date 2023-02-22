@@ -88,7 +88,7 @@ def get_paper_year(ppr):
     return year
 
 
-def prep_para(ppr, para, nice_math=False):
+def prep_para(ppr, para, unicode_math=False):
     """ For a single paragraph.
     """
 
@@ -97,18 +97,20 @@ def prep_para(ppr, para, nice_math=False):
     for ref_span in para['ref_spans']:
         rid = ref_span['ref_id']
         ref_entry = ppr['ref_entries'][rid]
-        if nice_math and ref_entry['type'] == 'formula':
-            # TODO: test latex2mathml as alternative
-            #       b/c unicodeit is sloooow
-            # unicodeit based replacement
-            math_unicode = unicodeit.replace(
-                ref_entry['latex']
-            )
-            # math font command replacement
-            math_unicode = mathfont_patt.sub(
-                r'\2', math_unicode
-            )
-            replacement_dict[ref_span['text']] = math_unicode
+        if ref_entry['type'] == 'formula':
+            if unicode_math:
+                # this is SLOW (b/c unicodeit is)
+                math_unicode = unicodeit.replace(
+                    ref_entry['latex']
+                )
+                # math font command replacement
+                math_unicode = mathfont_patt.sub(
+                    r'\2', math_unicode
+                )
+                replacement_dict[ref_span['text']] = math_unicode
+            else:
+                latex_intext = '\(' + ref_entry['latex'] + '\)'
+                replacement_dict[ref_span['text']] = latex_intext
         else:
             repl_token = '<{}>'.format(ref_entry['type'].upper())
             replacement_dict[ref_span['text']] = repl_token
