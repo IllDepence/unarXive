@@ -15,8 +15,6 @@ alloc_map = {
         [
             'introduction',
             'introduction and preliminaries',
-            'preliminaries',
-            'preliminary',
             'background',
             'motivation',
         ],
@@ -94,14 +92,8 @@ def prep_para(ppr, para):
     """ For a single paragraph.
     """
 
-    replacement_dict = defaultdict(tuple)
-
-    # citation markers
-    for i, cite_span in enumerate(para['cite_spans']):
-        cit_marker = '[{}]'.format(i+1)
-        replacement_dict[cite_span['text']] = cit_marker
-
-    # math notation, figures and tables
+    # prepare math notation, figures, and tables
+    replacement_dict = {}
     for ref_span in para['ref_spans']:
         rid = ref_span['ref_id']
         ref_entry = ppr['ref_entries'][rid]
@@ -118,13 +110,54 @@ def prep_para(ppr, para):
         else:
             repl_token = '<{}>'.format(ref_entry['type'].upper())
             replacement_dict[ref_span['text']] = repl_token
-
     # make replacements
     para_prepd = para['text']
     for repl_key, repl in replacement_dict.items():
         para_prepd = para_prepd.replace(repl_key, repl)
 
-    return para_prepd
+    # prepare citation markers
+    cit_docs_seen = []
+    cit_refid2mark = {}
+    cit_mrk_links = {}
+    for i, cite_span in enumerate(para['cite_spans']):
+        # keep track of already assigned
+        ref_id = cite_span['ref_id']
+        if ref_id in cit_docs_seen:
+            continue
+        cit_docs_seen.append(ref_id)
+        # only define replacements once per cited doc
+        cit_marker = '[{}]'.format(i+1)
+        cit_refid2mark[ref_id] = cit_marker
+        ref = ppr['bib_entries'].get(ref_id, {})
+        oa_id = ref.get('ids', {}).get('open_alex_id', '')
+        if len(oa_id) > 0:
+            ref = OrderedDict({
+                'id': oa_id,
+                'ref': ref.get('bib_entry_raw', ''),
+                'offsets': []
+            })
+            cit_mrk_links[cit_marker] = ref
+    # make replacements and keep track of offsets
+    for i, cite_span in enumerate(para['cite_spans']):
+        # find marker
+        marker_text = cite_span['text']
+        starts_at = para_prepd.index(marker_text)
+        pre = para_prepd[:starts_at]
+        post = para_prepd[starts_at+len(marker_text)-1:]
+        # replace
+        cit_marker = cit_refid2mark[cite_span['ref_id']]
+        repl = cit_marker
+        para_prepd = pre + repl + post
+        # note offset for linked refs
+        cit_marker = cit_refid2mark[cite_span['ref_id']]
+        if cit_marker in cit_mrk_links:
+            ends_at = starts_at+len(cit_marker)
+            cit_mrk_links[cit_marker]['offsets'].append(
+                (starts_at, ends_at)
+            )
+            assert para_prepd[starts_at:ends_at] == cit_marker
+
+    return para_prepd, cit_mrk_links
 
 
 def prep(root_dir):
@@ -133,7 +166,7 @@ def prep(root_dir):
 
     counts = defaultdict(int)
 
-    # go through JSONLs
+    # collect JSONLs
     jsonl_fps = []
     for path_to_file, subdirs, files in os.walk(root_dir):
         for fn in files:
@@ -146,9 +179,11 @@ def prep(root_dir):
     nocs = 0
     imrad_paras = 0
     ml_smpl_packets = []
+    # go through JSONLs
     for fp in jsonl_fps:
         with open(fp) as f:
-            for line in f:
+            for line_num, line in enumerate(f):
+                # process paper
                 ml_smpls = []
                 ppr = json.loads(line)
                 main_cat = ppr['metadata']['categories'].split(' ')[-1]
@@ -156,7 +191,7 @@ def prep(root_dir):
                     nocs += 1
                 else:
                     cs += 1
-                    for para in ppr['body_text']:
+                    for para_num, para in enumerate(ppr['body_text']):
                         sec_pre = para.get('section', '')
                         if sec_pre is None:
                             sec_pre = ''
@@ -178,7 +213,7 @@ def prep(root_dir):
                             counts['_noclass'] += 1
                         if label is not None:
                             imrad_paras += 1
-                            para_prepd = prep_para(ppr, para)
+                            para_prepd, cit_mrk_links = prep_para(ppr, para)
                             if len(para_prepd) < 200:
                                 counts['_tooshort'] += 1
                             else:
@@ -189,6 +224,28 @@ def prep(root_dir):
                                         'text': para_prepd
                                 })
                                 ml_smpls.append(ml_smpl)
+                                if len(cit_mrk_links) > 0:
+                                    print(para_prepd)
+                                    pprint.pprint(cit_mrk_links)
+                                    x = input()
+                                    if x == 'q':
+                                        sys.exit()
+                                    elif x == 'w':
+                                        with open(
+                                            'ml_task_citrec_{}-{}-{}.json'.format(
+                                                ppr['paper_id'].replace(
+                                                    '/', ''
+                                                ),
+                                                line_num,
+                                                para_num
+                                            ),
+                                            'w'
+                                        ) as fo:
+                                            smpl = OrderedDict({
+                                                'context': para_prepd,
+                                                'citations': cit_mrk_links
+                                            })
+                                            json.dump(smpl, fo)
                     ml_smpl_packet = OrderedDict({
                             'year': get_paper_year(ppr),  # for stratified
                             'cat': main_cat,              # sampling
