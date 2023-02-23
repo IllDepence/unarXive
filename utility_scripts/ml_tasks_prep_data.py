@@ -180,7 +180,9 @@ def prep(root_dir):
                 fp = os.path.join(path_to_file, fn)
                 if os.path.getsize(fp) > 0:
                     jsonl_fps.append(fp)
-    imrad_paras = 0
+    num_imrad_smpls = 0
+    num_citrec_smpls = 0
+    num_citrec_paras = 0
     imrad_smpl_packets = []
     citrec_smpl_packets = []
     paper_license_dict = {}
@@ -232,11 +234,11 @@ def prep(root_dir):
                     else:
                         counts['_noclass'] += 1
                     if label is not None:
-                        imrad_paras += 1
                         if len(para_prepd) < 200:
                             counts['_tooshort'] += 1
                         else:
                             counts[label] += 1
+                            num_imrad_smpls += 1
                             imrad_smpl = OrderedDict({
                                     '_paper_id': ppr['paper_id'],
                                     '_orig_sec': sec_pre,
@@ -247,6 +249,8 @@ def prep(root_dir):
                     # create citation recommedation classification task data
                     sec_pre = para.get('section', '')
                     if len(cit_mrk_links) > 0:
+                        num_citrec_paras += 1
+                        num_citrec_smpls += len(cit_mrk_links)
                         citrec_smpl = OrderedDict({
                             '_paper_id': ppr['paper_id'],
                             'context': para_prepd,
@@ -271,11 +275,19 @@ def prep(root_dir):
                         })
                     citrec_smpl_packets.append(citrec_smpl_packet)
 
-    print(len(imrad_smpl_packets))
-    print(len(citrec_smpl_packets))
     # TODO:
     # - make stratified tain/test/val splits
     # - persist
+
+    # get distribution numbers
+    citrec_year_cat_dist = defaultdict(int)
+    for ppr_smpls in citrec_smpl_packets:
+        key = ppr_smpls['discipline'] + '-' + str(ppr_smpls['year'])
+        citrec_year_cat_dist[key] += len(ppr_smpls['citrec_smpls'])
+    imrad_year_cat_dist = defaultdict(int)
+    for ppr_smpls in imrad_smpl_packets:
+        key = ppr_smpls['discipline'] + '-' + str(ppr_smpls['year'])
+        imrad_year_cat_dist[key] += len(ppr_smpls['imrad_smpls'])
 
     with open('license_information.json', 'w') as f:
         json.dump(paper_license_dict, f)
@@ -284,8 +296,18 @@ def prep(root_dir):
     with open('citrec_data.json', 'w') as f:
         json.dump(citrec_smpl_packets, f)
 
+    print('citrec papers used:')
+    print(len(citrec_smpl_packets))
+    print(f'{num_citrec_paras} citrec paras')
+    print(f'{num_citrec_smpls} citrec samples')
+    pprint.pprint(citrec_year_cat_dist)
+    print()
+    print()
+    print('IMRAD papers used:')
+    print(len(imrad_smpl_packets))
+    print(f'{num_imrad_smpls} IMRaD samples')
     pprint.pprint(counts)
-    print(f'{imrad_paras} IMRaDR papras')
+    pprint.pprint(imrad_year_cat_dist)
 
 
 if __name__ == '__main__':
