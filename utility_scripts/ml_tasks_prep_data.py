@@ -186,6 +186,7 @@ def prep(root_dir):
     imrad_smpl_packets = []
     citrec_smpl_packets = []
     paper_license_dict = {}
+    num_smpls_per_cited_doc = defaultdict(int)
     # go through JSONLs
     for i, fp in enumerate(jsonl_fps):
         print(f'{i}/{len(jsonl_fps)}')
@@ -195,7 +196,10 @@ def prep(root_dir):
                 # process paper
                 imrad_smpls = []
                 citrec_smpls = []
-                ppr = json.loads(line)
+                try:
+                    ppr = json.loads(line)
+                except json.decoder.JSONDecodeError:
+                    print(f'failed to load {fp} line {line_num}\nskipping ...')
                 # metadata
                 metadata = ppr.get('metadata', {})
                 license_url = metadata.get('license', None)
@@ -250,13 +254,19 @@ def prep(root_dir):
                     sec_pre = para.get('section', '')
                     if len(cit_mrk_links) > 0:
                         num_citrec_paras += 1
-                        num_citrec_smpls += len(cit_mrk_links)
-                        citrec_smpl = OrderedDict({
-                            '_paper_id': ppr['paper_id'],
-                            'context': para_prepd,
-                            'citations': cit_mrk_links
-                        })
-                        citrec_smpls.append(citrec_smpl)
+                        # create one sample per cited doc
+                        for marker, cit_mrk_link in cit_mrk_links.items():
+                            num_citrec_smpls += 1
+                            num_smpls_per_cited_doc[ppr['paper_id']] += 1
+                            citrec_smpl = OrderedDict({
+                                '_paper_id': ppr['paper_id'],
+                                '_raw_ref': cit_mrk_link['ref'],
+                                'context': para_prepd,
+                                'marker_text': marker,
+                                'marker_offsets': cit_mrk_link['offsets'],
+                                'cited_doc': cit_mrk_link['id']
+                            })
+                            citrec_smpls.append(citrec_smpl)
                 # pack all of samples from one paper
                 if len(imrad_smpls) > 0:
                     imrad_smpl_packet = OrderedDict({
@@ -301,6 +311,9 @@ def prep(root_dir):
     print(f'{num_citrec_paras} citrec paras')
     print(f'{num_citrec_smpls} citrec samples')
     pprint.pprint(citrec_year_cat_dist)
+    cit_docs_ge3 = len([v for v in num_smpls_per_cited_doc.values() if v >= 3])
+    cit_docs_lt3 = len([v for v in num_smpls_per_cited_doc.values() if v < 3])
+    print(f'{cit_docs_ge3} w/ 3+ smpls, {cit_docs_lt3} w/ <3')
     print()
     print()
     print('IMRAD papers used:')
