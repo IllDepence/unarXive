@@ -186,6 +186,7 @@ def prep(root_dir):
     imrad_smpl_packets = []
     citrec_smpl_packets = []
     paper_license_dict = {}
+    num_pprs_per_cited_doc = defaultdict(int)
     num_smpls_per_cited_doc = defaultdict(int)
     # go through JSONLs
     for i, fp in enumerate(jsonl_fps):
@@ -257,14 +258,14 @@ def prep(root_dir):
                         # create one sample per cited doc
                         for marker, cit_mrk_link in cit_mrk_links.items():
                             num_citrec_smpls += 1
-                            num_smpls_per_cited_doc[ppr['paper_id']] += 1
+                            num_smpls_per_cited_doc[cit_mrk_link['id']] += 1
                             citrec_smpl = OrderedDict({
                                 '_paper_id': ppr['paper_id'],
                                 '_raw_ref': cit_mrk_link['ref'],
-                                'context': para_prepd,
-                                'marker_text': marker,
+                                'text': para_prepd,
+                                'marker': marker,
                                 'marker_offsets': cit_mrk_link['offsets'],
-                                'cited_doc': cit_mrk_link['id']
+                                'label': cit_mrk_link['id']
                             })
                             citrec_smpls.append(citrec_smpl)
                 # pack all of samples from one paper
@@ -277,6 +278,11 @@ def prep(root_dir):
                         })
                     imrad_smpl_packets.append(imrad_smpl_packet)
                 if len(citrec_smpls) > 0:
+                    uniq_lbls = set(
+                        [s['label'] for s in citrec_smpls]
+                    )
+                    for lbl in uniq_lbls:
+                        num_pprs_per_cited_doc[lbl] += 1
                     citrec_smpl_packet = OrderedDict({
                             'year': get_paper_year(ppr),  # for stratified
                             'discipline': grp_id,              # sampling
@@ -284,10 +290,6 @@ def prep(root_dir):
                             'citrec_smpls': citrec_smpls.copy()
                         })
                     citrec_smpl_packets.append(citrec_smpl_packet)
-
-    # TODO:
-    # - make stratified tain/test/val splits
-    # - persist
 
     # get distribution numbers
     citrec_year_cat_dist = defaultdict(int)
@@ -311,9 +313,24 @@ def prep(root_dir):
     print(f'{num_citrec_paras} citrec paras')
     print(f'{num_citrec_smpls} citrec samples')
     pprint.pprint(citrec_year_cat_dist)
-    cit_docs_ge3 = len([v for v in num_smpls_per_cited_doc.values() if v >= 3])
-    cit_docs_lt3 = len([v for v in num_smpls_per_cited_doc.values() if v < 3])
-    print(f'{cit_docs_ge3} w/ 3+ smpls, {cit_docs_lt3} w/ <3')
+    cit_docs_smpls_ge3 = len(
+        [v for v in num_smpls_per_cited_doc.values() if v >= 3]
+    )
+    cit_docs_smpls_lt3 = len(
+        [v for v in num_smpls_per_cited_doc.values() if v < 3]
+    )
+    cit_docs_pprs_ge3 = len(
+        [v for v in num_pprs_per_cited_doc.values() if v >= 3]
+    )
+    cit_docs_pprs_lt3 = len(
+        [v for v in num_pprs_per_cited_doc.values() if v < 3]
+    )
+    print((
+        f'{cit_docs_smpls_ge3} cited docs'
+        f' w/ 3+ smpls, {cit_docs_smpls_lt3} w/ <3\n'
+        f'{cit_docs_pprs_ge3} cited docs'
+        f' w/ 3+ pprs, {cit_docs_pprs_lt3} w/ <3'
+    ))
     print()
     print()
     print('IMRAD papers used:')
