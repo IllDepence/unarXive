@@ -3,7 +3,7 @@ import os
 import pprint
 import re
 import sys
-import unicodeit
+# import unicodeit
 from collections import defaultdict, OrderedDict
 from calc_stats import get_coarse_arxiv_category
 
@@ -210,7 +210,7 @@ def prep(root_dir):
                     continue
                 authors = metadata.get('authors', None)
                 paper_license_dict[ppr['paper_id']] = {
-                    'licemse': license_url,
+                    'license': license_url,
                     'authors': authors
                 }
                 main_cat = metadata.get('categories', '').split(' ')[-1]

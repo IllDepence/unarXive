@@ -3,15 +3,19 @@ import math
 import os
 import random
 import sys
-from collections import defaultdict
+import uuid
+from collections import defaultdict, OrderedDict
 
 
-def split(fn):
-    with open(fn) as f:
+def split(fn_to_split, fn_license_info):
+    with open(fn_to_split) as f:
         smpl_packs = json.load(f)
+    with open(fn_license_info) as f:
+        paper_license_dict = json.load(f)
+    license_dict_dist = {}
 
-    dev_size_min_smpls = 1000
-    test_size_min_smpls = 1000
+    dev_size_min_smpls = 1500
+    test_size_min_smpls = 1500
     splits = ['test', 'dev', 'train']  # in fill order
 
     # determine sample and label key
@@ -117,9 +121,12 @@ def split(fn):
                     num_strat_dims_needed += 1
             # add if useful
             if num_strat_dims_needed == len(strat_dimensions):
-                smpls_split[split].extend(
-                    remove_debug_fields(ppr[sample_key])
+                clean_smpls = clean_samples(
+                    ppr[sample_key],
+                    paper_license_dict,
+                    license_dict_dist
                 )
+                smpls_split[split].extend(clean_smpls)
                 added = True
                 # keep track of allocation numbers
                 split_currs[split]['year'][ppr['year']] += len(
@@ -137,9 +144,12 @@ def split(fn):
                 break
         # add to train if “not needed” in tran/dev
         if not added:
-            smpls_split['train'].extend(
-                remove_debug_fields(ppr[sample_key])
+            clean_smpls = clean_samples(
+                ppr[sample_key],
+                paper_license_dict,
+                license_dict_dist
             )
+            smpls_split['train'].extend(clean_smpls)
 
     # for split in splits[:-1]:
     #     print(split)
@@ -154,31 +164,61 @@ def split(fn):
     #                 f'-> {rel_of_split:.4f}'
     #                 f' ({split_currs[split][strat][k]})'
     #             ))
-    #             input()
 
-    fn_base, ext = os.path.splitext(os.path.split(fn)[-1])
+    # persist samples
+    fn_base, ext = os.path.splitext(os.path.split(fn_to_split)[-1])
     for split, smpls in smpls_split.items():
         fn = f'{fn_base}_{split}.jsonl'
         with open(fn, 'w') as f:
             for smpl in smpls:
                 f.write(json.dumps(smpl) + '\n')
+    # persist license info
+    fn_license = f'{fn_base}_license_info.jsonl'
+    with open(fn_license, 'w') as f:
+        for arxiv_id, license_info in license_dict_dist.items():
+            line = json.dumps(license_info)
+            f.write(f'{line}\n')
 
 
-def remove_debug_fields(smpls):
-    """ Remove dict fields starting with _
+def clean_samples(smpls, paper_license_dict, license_dict_dist):
+    """ Prepare samples and their license info for distribution
+
+        - remove debug information from samples
+          (=dict fields starting with an underscore)
+        - generate per sample lincense info
     """
 
     clean_smpls = []
     for smpl in smpls:
-        clean_smpls.append(
-            {
-                k: v for (k, v)
-                in smpl.items()
-                if k[0] != '_'
-            }
-        )
+        smpl_id = str(uuid.uuid4())
+        # generate clean sample
+        clean_smpl = OrderedDict()
+        clean_smpl['_id'] = smpl_id
+        clean_smpl['text'] = smpl['text']
+        for k, v in smpl.items():
+            if k[0] != '_' and k not in ['text', 'label']:
+                clean_smpl[k] = v
+        clean_smpl['label'] = smpl['label']
+        # note sample IDs for license info
+        ppr_id = smpl['_paper_id']
+        license_info = paper_license_dict[ppr_id]
+        if ppr_id not in license_dict_dist:
+            ld = OrderedDict()
+            ld['paper_arxiv_id'] = ppr_id
+            ld['authors'] = license_info['authors']
+            ld['license'] = license_info['license']
+            ld['sample_ids'] = []
+            license_dict_dist[ppr_id] = ld
+        license_dict_dist[ppr_id]['sample_ids'].append(smpl_id)
+
+        clean_smpls.append(clean_smpl)
     return clean_smpls
 
 
 if __name__ == '__main__':
-    split(sys.argv[1])
+    if len(sys.argv) != 3:
+        print('usage ...')
+    else:
+        to_split = sys.argv[1]
+        license_info = sys.argv[2]
+        split(to_split, license_info)
