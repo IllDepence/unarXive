@@ -2,9 +2,27 @@ import json
 import os
 import sys
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from collections import defaultdict
 from arxiv_taxonomy import GROUPS, ARCHIVES, CATEGORIES
+
+
+def refmatch_rate(root_dir='tmp_foo', until_2020=False):
+    mtrs, idxs = calc_stats(root_dir)
+    refs_total = 0
+    refs_linked_total = 0
+    for year, y_idx in idxs['year_to_idx'].items():
+        val_total = np.sum(mtrs['num_refs'][:, y_idx[0]:y_idx[-1]])
+        val_linked = np.sum(mtrs['num_refs_linked'][:, y_idx[0]:y_idx[-1]])
+        if until_2020 and year in ['2021', '2022']:
+            print('skipping year {}'.format(year))
+            continue
+        refs_total += val_total
+        refs_linked_total += val_linked
+    print(f'total: {refs_total}')
+    print(f'linked: {refs_linked_total}')
+    print(refs_linked_total/refs_total)
 
 
 def get_fine_arxiv_category_name(cat_id):
@@ -338,12 +356,12 @@ def get_cats_over_years_plot_data(mtrxs, idxs, part_key, total_key=None):
         total_key='num_refs'
     """
 
-    ref_succ_rates = {}
+    stats_vals = {}
     years = list(idxs['year_to_idx'].keys())  # x labels for plot
     for disc, d_idx in idxs['grp_to_idx'].items():
         # for each discipline, create a list of ref matching success
         # rates with one value per year (NOTE: change to month?)
-        ref_succ_rates[disc] = []
+        stats_vals[disc] = []
         for year, y_idx in idxs['year_to_idx'].items():
             val_part = np.sum(mtrxs[part_key][
                 d_idx[0]:
@@ -367,12 +385,35 @@ def get_cats_over_years_plot_data(mtrxs, idxs, part_key, total_key=None):
                 else:
                     quota = val_part / val_total
                 stats_val = quota
-            ref_succ_rates[disc].append(stats_val)
-    return ref_succ_rates, years
+            stats_vals[disc].append(stats_val)
+    return stats_vals, years
 
 
-def demoplot(stat1_key=None, stat2_key=None, mayor_only=False):
-    mayors = [
+def livetest():
+    # Papers per year figure
+    demoplot(
+        stat1_key='num_pprs',
+        xlabel='Year',
+        ylabel='Number of papers',
+        title='Number of papers by discipline'
+    )
+    # Reference density figure
+    # demoplot(
+    #     stat1_key='num_refs',
+    #     stat2_key='num_paras',
+    #     xlabel='Year',
+    #     ylabel='Number of references per paragraph',
+    #     major_only=True
+    # )
+
+
+def demoplot(
+        stat1_key=None, stat2_key=None,
+        xlabel='', ylabel='', title='',
+        major_only=False, no_test_cat=True,
+        short_labels=True
+):
+    majors = [
         'Physics', 'Mathematics', 'Computer Science'
     ]
     if stat1_key is None and stat2_key is None:
@@ -381,23 +422,55 @@ def demoplot(stat1_key=None, stat2_key=None, mayor_only=False):
     elif stat2_key is None:
         stat1_key = 'num_pprs'
     matrices, indices = calc_stats('enriched_tmp')
-    succs, yrs = get_cats_over_years_plot_data(
+    stats_vals, yrs = get_cats_over_years_plot_data(
         matrices,
         indices,
         stat1_key,
         stat2_key
     )
-    for gk, vals in succs.items():
+
+    cm = 1/2.54
+    fig = plt.figure(figsize=[15*cm, 9*cm])
+    ax = fig.add_subplot(111)
+
+    intyrs = [int(y) for y in yrs]
+    for gk, vals in stats_vals.items():
         gn = get_coarse_arxiv_group_name(gk)
-        if mayor_only and gn not in mayors:
+        if major_only and gn not in majors:
             continue
-        plt.plot(yrs, vals, label=gn)
+        if no_test_cat and gn == 'Test':
+            continue
+        if short_labels:
+            if gn == 'Electrical Engineering and Systems Science':
+                gn = 'Elect. Eng. & Sys. Sci.'
+        ax.plot(intyrs, vals, label=gn, marker='.')
 
-    plt.legend()
-    plt.show()
+    xtks = [
+        int(y) for y in
+        np.arange(
+            min(intyrs),
+            max(intyrs)+1,
+            3.0
+        )
+    ]
+    ax.set_xticks(xtks)
+    ax.set_xticklabels(xtks, rotation=90)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    ax.get_yaxis().set_major_formatter(  # fig1
+        mpl.ticker.FuncFormatter(lambda x, p: str(int(x/1000))+'k')  #
+    )  #
+    fig.legend(loc='upper center', ncol=2)  # / fig1
+
+    # fig.legend(loc='upper center', ncol=1)  # fig2
+
+    fig.tight_layout()
+    fig.show()
+    fig.savefig('/tmp/demoax.pdf')
 
 
-def calc_stats(root_dir, force_calc=False):
+def calc_stats(root_dir, force_calc=False, save_dir=None):
     """ Calculates a range of stats, each stored in a matrix of dimensions
             num_categories × num_months
         where consecutive sections of rows/columns are category groups/years.
@@ -425,7 +498,7 @@ def calc_stats(root_dir, force_calc=False):
 
     # use pre-calculated stats if possible
     if not force_calc:
-        precalc_stats = load_from_disk()
+        precalc_stats = load_from_disk(save_dir)
         if precalc_stats is not None:
             stats_matrix_dict, stats_matrix_indices = precalc_stats
             return stats_matrix_dict, stats_matrix_indices
@@ -567,14 +640,15 @@ def save_to_disk(stats_matrix_dict, stats_matrix_indices):
             json.dump(index_dict, f)
 
 
-def load_from_disk():
+def load_from_disk(save_dir=None):
     """ Load stats from disk if previously persisted.
     """
 
     stats_matrix_dict = {}
     stats_matrix_indices = {}
 
-    save_dir = get_save_dir()
+    if save_dir is None:
+        save_dir = get_save_dir()
     if not os.path.exists(save_dir):
         return None
     print('loading previously persisted stats from disk')
@@ -599,6 +673,8 @@ def load_from_disk():
 
 
 if __name__ == '__main__':
+    if len(sys.argv) == 1:
+        livetest()
     if len(sys.argv) != 2:
         print('Usage: calc_stats.py <root_dir>')
         sys.exit()
