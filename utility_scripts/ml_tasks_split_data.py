@@ -7,12 +7,32 @@ import uuid
 from collections import defaultdict, OrderedDict
 
 
-def split(fn_to_split, fn_license_info):
+def split(fn_to_split, fn_license_info, single_disc):
+    """ Create train/dev/test splits using stratified sampling accross
+        - publications years
+        - disciplines
+        - target labels
+
+        Possible single_disc values for filtering:
+        grp_physics
+        grp_math
+        grp_cs
+        grp_q-bio
+        grp_q-fin
+        grp_stat
+    """
+
     with open(fn_to_split) as f:
         smpl_packs = json.load(f)
     with open(fn_license_info) as f:
         paper_license_dict = json.load(f)
     license_dict_dist = {}
+
+    if single_disc is not None:
+        print(f'only using samples from discipline {single_disc}')
+        smpl_packs = [
+            sp for sp in smpl_packs if sp['discipline'] == single_disc
+        ]
 
     dev_size_min_smpls = 1500
     test_size_min_smpls = 1500
@@ -216,9 +236,12 @@ def clean_samples(smpls, paper_license_dict, license_dict_dist):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in [3, 4]:
         print('usage ...')
     else:
         to_split = sys.argv[1]
         license_info = sys.argv[2]
-        split(to_split, license_info)
+        single_disc = None
+        if len(sys.argv) == 4:
+            single_disc = sys.argv[3]
+        split(to_split, license_info, single_disc=single_disc)
