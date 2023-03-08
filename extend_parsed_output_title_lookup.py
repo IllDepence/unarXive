@@ -371,8 +371,8 @@ def extend_parsed_arxiv_chunk(params):
     cursor_arxiv = connection_arxiv_db.cursor()
 
     # check if folder exists
-    chunk_fn = jsonl_file_path.split("/")[-1]  # FIXME: use os.path instead of
-    year_dir = jsonl_file_path.split("/")[-2]  # fiddling with strings manuall
+    chunk_fn = os.path.basename(jsonl_file_path)
+    year_dir = os.path.split(os.getcwd())[1]
     year_dir_path = os.path.join(output_root_dir, year_dir)
     enriched_chunk_fp = os.path.join(year_dir_path, chunk_fn)
     if not os.path.exists(year_dir_path):
