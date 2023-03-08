@@ -398,6 +398,14 @@ def extend_parsed_arxiv_chunk(params):
                             title = None
                             grobid_flag = False
 
+                            # append empty ids dict.
+                            json_data['bib_entries'][bib_entry]['ids'] = {} # TODO: maybe use a OrderedDict
+                            json_data['bib_entries'][bib_entry]['ids']['open_alex_id'] = ""
+                            json_data['bib_entries'][bib_entry]['ids']['sem_open_alex_id'] = ""
+                            json_data['bib_entries'][bib_entry]['ids']['pubmed_id'] = ""
+                            json_data['bib_entries'][bib_entry]['ids']['pmc_id'] = ""
+                            json_data['bib_entries'][bib_entry]['ids']['doi'] = ""
+
                             # look for arxiv ID in parsed bib entry data
                             if len(json_data['bib_entries'][bib_entry]['contained_arXiv_ids']) != 0:
 
@@ -573,14 +581,6 @@ def extend_parsed_arxiv_chunk(params):
                                 # print("[title extraction] No title identifiable in: ", bib_item_ref_string)
                                 bib_item_no_title_error_counter += 1
 
-                                # append empty ids dict.
-                                json_data['bib_entries'][bib_entry]['ids'] = {}
-                                json_data['bib_entries'][bib_entry]['ids']['open_alex_id'] = ""
-                                json_data['bib_entries'][bib_entry]['ids']['sem_open_alex_id'] = ""
-                                json_data['bib_entries'][bib_entry]['ids']['pubmed_id'] = ""
-                                json_data['bib_entries'][bib_entry]['ids']['pmc_id'] = ""
-                                json_data['bib_entries'][bib_entry]['ids']['doi'] = ""
-
                             # title is found and now used to check (local) OpenAlex database
                             if title is not None:
                                 bib_item_title_norm = normalize_title(title)
@@ -605,20 +605,11 @@ def extend_parsed_arxiv_chunk(params):
                                     # print('[OA lookup] no match was returned for:', bib_item_title_norm)
                                     bib_item_title_not_in_openalex_error_counter += 1
 
-                                    # append empty ids dict.
-                                    json_data['bib_entries'][bib_entry]['ids'] = {}
-                                    json_data['bib_entries'][bib_entry]['ids']['open_alex_id'] = ""
-                                    json_data['bib_entries'][bib_entry]['ids']['sem_open_alex_id'] = ""
-                                    json_data['bib_entries'][bib_entry]['ids']['pubmed_id'] = ""
-                                    json_data['bib_entries'][bib_entry]['ids']['pmc_id'] = ""
-                                    json_data['bib_entries'][bib_entry]['ids']['doi'] = ""
-
                                 elif matching_openalex_pub is not None:
                                     # print('[OA lookup] MATCH was returned - adding IDs from OpenAlex DB to current publication json')
                                     bib_entry_ids_dict = map_ids_from_openalexdb_match_to_dict(matching_openalex_pub)
 
                                     # add data from OpenAlex to JSON object of current publication
-                                    json_data['bib_entries'][bib_entry]['ids'] = {}   # TODO: maybe use a OrderedDict
                                     json_data['bib_entries'][bib_entry]['ids']['open_alex_id'] = bib_entry_ids_dict[
                                         'open_alex_id']
                                     json_data['bib_entries'][bib_entry]['ids']['sem_open_alex_id'] = bib_entry_ids_dict[
