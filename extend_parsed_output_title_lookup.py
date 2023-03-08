@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime, time
 from multiprocessing import Pool
 from psycopg2.extras import Json, DictCursor
+from collections import OrderedDict
 
 
 ARXIV_URL_PATT = re.compile(
@@ -399,7 +400,8 @@ def extend_parsed_arxiv_chunk(params):
                             grobid_flag = False
 
                             # append empty ids dict.
-                            json_data['bib_entries'][bib_entry]['ids'] = {} # TODO: maybe use a OrderedDict
+
+                            json_data['bib_entries'][bib_entry]['ids'] = OrderedDict()
                             json_data['bib_entries'][bib_entry]['ids']['open_alex_id'] = ""
                             json_data['bib_entries'][bib_entry]['ids']['sem_open_alex_id'] = ""
                             json_data['bib_entries'][bib_entry]['ids']['pubmed_id'] = ""
@@ -518,7 +520,7 @@ def extend_parsed_arxiv_chunk(params):
 
 
                                 except TypeError as te:  # FIXME: where would that occurr in the large block above?
-                                    print(te,f" in doi candidate '{doi_candi}'") # <- print to check possible TypeError
+                                    print(f"## {te} in doi candidate '{doi_candi}' ##") # <- print to check possible TypeError
                                     pass
 
                                 # for the unprobable case that two threads look up the title for same DOI
