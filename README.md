@@ -1,63 +1,80 @@
-## usage
+# unarXive
 
-### Prerequisites
-* software
-    * Tralics (Ubuntu: `# apt install tralics`)
-    * latexpand (Ubuntu: `# apt install texlive-extra-utils`)
-* data
-    * arXiv source files (acquire sample [here](https://bwsyncandshare.kit.edu/s/Yp9tE6YgitpXfQ8), needs to be extracted before use)
+**Access**
 
-### Usage
-* setup virtual environment with packages in requirements.txt
-* run `normalize_arxiv_dump.py` on raw source files
-* run `prase_latex_tralics.py` on normalized LaTeX files
+* Data Set on Zenodo: [full](https://doi.org/10.5281/zenodo.TODO) / [permissively licensed subset](https://doi.org/10.5281/zenodo.TODO)
+* [Data Sample](doc/data_same.tar.gz)
+* ML Data on Huggingface: [citation recommendation](https://huggingface.co/datasets/saier/citrec) / [IMRaD classification](https://huggingface.co/datasets/saier/unarXive_imrad_clf)
 
-### Testruns
+**Documentation**
+
+* Papers: [*Scientometrics* 2020](http://link.springer.com/article/10.1007/s11192-020-03382-z) / [JCDL 2023](https://dl.acm.org/doi/abs/TODO)
+* [Data Format](#data)
+* [Usage](#usage)
+* [Development](#development)
+* [Cite](#cite-as)
+
+# Data
+
+<p align="center">
+  <img src="https://codebase.helmholtz.cloud/tarek.saier/hiwi_task_220629_latexparse/-/raw/s2orc_output_format/doc/schema.svg" alt="unarXive schema" width="100%">
+</p>
+
+unarXive contains
+
+* ...
+
+A comprehensive documentation of the data format be found [here](doc/data_format.md).
+
+You can find a **data sample** [here](doc/data_same.tar.gz).
+
+# Usage
+
+### Huggingface Datasets
+
+If you want to use unarXive for *citation recommendation* or *IMRaD classification*, you can simply use our Huggingface datasets:
+
+* [Citation Recommendation](https://huggingface.co/datasets/saier/unarxive_citrec)
+* [IMRaD Classification](https://huggingface.co/datasets/saier/unarXive_imrad_clf)
+
+For example, in the case of citation recommendation:
+
 ```
-(venv) ys8950@aifb-ls3-icarus:/opt/unarXive/unarXive_update_2022/hiwi_task_220629_latexparse$ time python3 prepare.py /mnt/lsdf_clasics/data/arxiv-2022-wip/copied_src_files/ /opt/unarXive/unarXive_update_2022/unarXive_2022_wip_2018data_parsed/
-1/392
-[...]
-392/392
-140616 files
-13430 PDFs
+from datasets import load_dataset
 
-real    504m4,681s
-user    373m41,079s
-sys     59m28,106s
+unarxive_citrec = load_dataset('saier/unarxive_citrec')
+unarxive_citrec = imrad.class_encode_column('label')  # set class label
+unarxive_citrec = imrad_wclass.remove_columns('_id')  # remove _id column
 ```
 
+# Development
 
-##### 2017 data
+(For instructions how to re-create or extend unarXive, see [doc/recreate.md](doc/recreate.md).
+
+**Versions**
+
+* Current release (1991–2022): see [*Access* section above](#access)
+* Previous releases ([old format](https://github.com/IllDepence/unarXive/tree/legacy_2020/)):
+    * [1991–Jul 2020](https://zenodo.org/record/4313164)
+    * [1991–2019](https://zenodo.org/record/3385851)
+
+**Development Status**
+
+See [issues](https://github.com/IllDepence/unarXive/issues).
+
+
+## Cite as
 ```
-(venv) ys8950@aifb-ls3-icarus:/opt/unarXive/unarXive_update_2022/hiwi_task_220629_latexparse$ time python3 prepare.py /mnt/lsdf_clasics/data/arxiv-2022-wip/copied_src_files/ /opt/unarXive/unarXive_update_2022/unarXive_2022_wip_2017data_parsed/
-1/305
-[...]
-305/305
-123523 files
-11202 PDFs
-
-real    640m38,377s
-user    519m0,535s
-sys     74m5,791s
+@article{Saier2020unarXive,
+  author        = {Saier, Tarek and F{\"{a}}rber, Michael},
+  title         = {{unarXive: A Large Scholarly Data Set with Publications’ Full-Text, Annotated In-Text Citations, and Links to Metadata}},
+  journal       = {Scientometrics},
+  year          = {2020},
+  volume        = {125},
+  number        = {3},
+  pages         = {3085--3108},
+  month         = dec,
+  issn          = {1588-2861},
+  doi           = {10.1007/s11192-020-03382-z}
+}
 ```
-
-### TODOs
-* investigate low rate of table and figure captions
-
-### Misc
-for a formula tag `t`, testing whether its string representation returned by
-```
-etree.tostring(
-    etree.ETXPath(
-        '{http://www.w3.org/1998/Math/MathML}math'
-    )(t)[0],
-    encoding='unicode',
-    method='text',
-    with_tail=False
-)
-```
-contains a space (“ ”) apppears to be a usable heuristic to decide whether or not it can safely be printed as a unicode string w/o loosing any information (e.g. super/subscript)
-
-### Troubleshooting
-If the creation of the virtual enviroment fails try [this](https://stackoverflow.com/questions/5178416/libxml-install-error-using-pip)
-or [this](https://stackoverflow.com/questions/22938679/error-trying-to-install-postgres-for-python-psycopg2)
