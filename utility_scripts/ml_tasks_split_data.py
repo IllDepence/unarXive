@@ -1,3 +1,12 @@
+""" Split data pepared by script ml_task_prep_data.py into train,
+    dev, and test.
+
+    Stratified sampling is used wrt.
+    - target clabel (class)
+    - (citing) paper discipline
+    - paper publication year
+"""
+
 import json
 import math
 import os
@@ -7,7 +16,7 @@ import uuid
 from collections import defaultdict, OrderedDict
 
 
-def split(fn_to_split, fn_license_info, single_disc):
+def split(fn_to_split, fn_license_info, dev_test_size, single_disc):
     """ Create train/dev/test splits using stratified sampling accross
         - publications years
         - disciplines
@@ -34,8 +43,8 @@ def split(fn_to_split, fn_license_info, single_disc):
             sp for sp in smpl_packs if sp['discipline'] == single_disc
         ]
 
-    dev_size_min_smpls = 1500
-    test_size_min_smpls = 1500
+    dev_size_min_smpls = dev_test_size
+    test_size_min_smpls = dev_test_size
     splits = ['test', 'dev', 'train']  # in fill order
 
     # determine sample and label key
@@ -236,12 +245,17 @@ def clean_samples(smpls, paper_license_dict, license_dict_dist):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) not in [3, 4]:
-        print('usage ...')
+    if len(sys.argv) not in [4, 5]:
+        print((
+            'Usage: python3 ml_tasks_split_data.py '
+            '<ml_data_file> <license_info_file> <dev/test set size> '
+            '[discipline filter]'
+        ))
     else:
         to_split = sys.argv[1]
         license_info = sys.argv[2]
+        dev_test_size = int(sys.argv[3])
         single_disc = None
-        if len(sys.argv) == 4:
-            single_disc = sys.argv[3]
-        split(to_split, license_info, single_disc=single_disc)
+        if len(sys.argv) == 5:
+            single_disc = sys.argv[4]
+        split(to_split, license_info, dev_test_size, single_disc=single_disc)

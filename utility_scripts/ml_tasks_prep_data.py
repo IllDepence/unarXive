@@ -1,3 +1,22 @@
+""" Generate train/test data for two ML tasks
+    - content based citation recommendation
+    - IMRaD classification
+    based on the full unarXive data set.
+
+    Data generation in done for both tasks together because both take
+    single paragraphs from papers an input. The script nicely prepares
+    paragraphs (replacing in-text annotation for linked content such as
+    references and mathematical notation with proper surface forms, e.g.
+    citation markers and plain text rendition of mathematical notation.
+
+    Note:
+    - splitting into train/dev/test is done in a separate script [1]
+    - filtering for disciplines and/or permissively licensed
+      content is done in a separate script [1]
+
+    [1] ml_tasks_split_data.py
+"""
+
 import json
 import os
 import pprint
@@ -341,8 +360,10 @@ def prep(root_dir):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) == 2:
-        root_dir = sys.argv[1]
-    else:
-        root_dir = 'preview_sample'
+    if len(sys.argv) != 2:
+        print(
+            'Usage: python3 ml_task_prep_data.py </path/to/unarXive/root/dir>'
+        )
+        sys.exit()
+    root_dir = sys.argv[1]
     prep(root_dir)
