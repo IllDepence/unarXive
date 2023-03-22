@@ -73,7 +73,6 @@ def extend_enhanced_arxiv_chunk(jsonl_file_path):
     openalex_match_count = 0
     arxiv_id_success_count = 0
 
-    # openalex_db_name = "openalex"
     conn = psycopg2.connect(database=openalex_db_name)
     cursor = conn.cursor()
 
@@ -195,8 +194,8 @@ if __name__ == '__main__':
         print('usage <in_dir> <out_dir> <openalex_db> <CPU workers>')
         sys.exit()
 
-    input_dir_enhanced_output_jsons = sys.argv[1]  # r'/opt/unarXive_2022/arxiv_enhanced'
-    output_dir_extended_enhanced_jsons = sys.argv[2]  # r'/opt/unarXive_2022/arxiv_enhanced_enrichment/'
+    input_dir_enhanced_output_jsons = sys.argv[1]  # r'/demo_in'
+    output_dir_extended_enhanced_jsons = sys.argv[2]  # r'/demo_out/'
     openalex_db_name = sys.argv[3]  # openalex_db_name = "openalex"
     CPU_THREADS = int(sys.argv[4])
 
