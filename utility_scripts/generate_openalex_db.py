@@ -57,13 +57,6 @@ def extract_arxiv_id_from_url(url):
     return success_flag, arxiv_id
 
 
-"""
-# remove previous instance of table "papers" if existing
-cursor = conn.cursor()
-cursor.execute("DROP TABLE IF EXISTS papers")
-conn.commit()
-"""
-
 conn = psycopg2.connect(database="openalex")
 cursor = conn.cursor()
 cursor.execute('''
@@ -189,7 +182,7 @@ for filename in glob.glob(os.path.join(input_dir_openalex_works_files, '*.gz')):
                         concept_name = ""
                         concept_url = ""
 
-                ### open access link + potentially arxiv ID from it
+                # open access link + potentially arxiv ID from it
                 oa_info = json_data['open_access']
                 arxiv_id = ""
                 oa_url = ""

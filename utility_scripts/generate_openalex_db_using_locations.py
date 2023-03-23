@@ -59,13 +59,6 @@ def extract_arxiv_id_from_url(url):
     return success_flag, arxiv_id
 
 
-"""
-# remove previous instance of table "papers" if existing
-cursor = conn.cursor()
-cursor.execute("DROP TABLE IF EXISTS papers")
-conn.commit()
-"""
-
 conn = psycopg2.connect(database="openalex")
 cursor = conn.cursor()
 cursor.execute('''
@@ -163,7 +156,7 @@ for filename in glob.glob(os.path.join(input_dir_openalex_works_files, '*.gz')):
                     if doi_short is not None:
                         if len(doi_short[0]) != 0:
                             doi_short = doi_short[0]
-                            #print(doi_short[0])
+                            # print(doi_short[0])
                     else:
                         doi_short = ""
 
@@ -191,7 +184,6 @@ for filename in glob.glob(os.path.join(input_dir_openalex_works_files, '*.gz')):
                         concept_name = ""
                         concept_url = ""
 
-                #TODO: this works for snapshots that include locations in works data only
                 oa_locations = json_data['locations']
                 urls = []
                 arxiv_url = ""
@@ -216,89 +208,15 @@ for filename in glob.glob(os.path.join(input_dir_openalex_works_files, '*.gz')):
                                         if success:
                                             arxiv_url = pdf_url
 
-                        ## remove duplicates from list
+                        # remove duplicates from list
                         urls = list(set(urls))
-
-                ## example location in JSON from API (not in dump files yet (23.3.23))
-                """                                  
-                  "locations": [
-                    {
-                      "is_oa": true,
-                      "landing_page_url": "https://doi.org/10.7717/peerj.4375",
-                      "pdf_url": null,
-                      "source": {
-                        "id": "https://openalex.org/S1983995261",
-                        "display_name": "PeerJ",
-                        "issn_l": "2167-8359",
-                        "issn": [
-                          "2167-8359"
-                        ],
-                        "host_organization": "https://openalex.org/P4310320104",
-                        "type": "journal"
-                      },
-                      "license": "cc-by",
-                      "version": "publishedVersion"
-                    },
-                    {
-                      "is_oa": true,
-                      "landing_page_url": "https://europepmc.org/articles/pmc5815332",
-                      "pdf_url": "https://europepmc.org/articles/pmc5815332?pdf=render",
-                      "source": {
-                        "id": "https://openalex.org/S4306400806",
-                        "display_name": "Europe PMC (PubMed Central)",
-                        "issn_l": null,
-                        "issn": null,
-                        "host_organization": null,
-                        "type": "repository"
-                      },
-                      "license": "cc-by",
-                      "version": "publishedVersion"
-                    },
-                    {
-                      "is_oa": true,
-                      "landing_page_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5815332",
-                      "pdf_url": null,
-                      "source": {
-                        "id": "https://openalex.org/S2764455111",
-                        "display_name": "PubMed Central",
-                        "issn_l": null,
-                        "issn": null,
-                        "host_organization": "https://openalex.org/I1299303238",
-                        "type": "repository"
-                      },
-                      "license": null,
-                      "version": "publishedVersion"
-                    },
-                    {
-                      "is_oa": true,
-                      "landing_page_url": "https://digitalcommons.unl.edu/cgi/viewcontent.cgi?article=1143&context=scholcom",
-                      "pdf_url": "https://digitalcommons.unl.edu/cgi/viewcontent.cgi?article=1143&context=scholcom",
-                      "source": null,
-                      "license": "cc-by",
-                      "version": "submittedVersion"
-                    },
-                    {
-                      "is_oa": true,
-                      "landing_page_url": "http://hdl.handle.net/1866/23242",
-                      "pdf_url": "https://papyrus.bib.umontreal.ca/xmlui/bitstream/1866/23242/1/peerj-06-4375.pdf",
-                      "source": {
-                        "id": "https://openalex.org/S4306402422",
-                        "display_name": "Papyrus : Institutional Repository (Université de Montréal)",
-                        "issn_l": null,
-                        "issn": null,
-                        "host_organization": "https://openalex.org/I70931966",
-                        "type": "repository"
-                      },
-                      "license": "cc-by",
-                      "version": "submittedVersion"
-                    }
-                  ],"""
 
                 conn = psycopg2.connect(database="openalex")
                 cursor = conn.cursor()
                 cursor.execute(
                     "INSERT INTO papers (number, openalex_id, normalized_title, authors, discipline_name, discipline_url, citation_count, ids, doi, oa_url, arxiv_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                    (i, openalex_id, work_title_norm, work_author_list_str, concept_name, concept_url, work_cited_by_count, ids_list, doi_short, arxiv_url, arxiv_id))
+                    (i, openalex_id, work_title_norm, work_author_list_str, concept_name, concept_url,
+                     work_cited_by_count, ids_list, doi_short, arxiv_url, arxiv_id))
 
                 conn.commit()
                 conn.close()
