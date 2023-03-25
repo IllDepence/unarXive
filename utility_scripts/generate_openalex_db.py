@@ -1,5 +1,6 @@
-# this script reads data from OpenAlex dump files (works type) and it into a local DB
-# imported are title, authors, citation counts and IDs
+""" Reads data from OpenAlex dump files (works type) and it into a local DB
+    imported are title, authors, citation counts and IDs
+"""
 
 
 import psycopg2

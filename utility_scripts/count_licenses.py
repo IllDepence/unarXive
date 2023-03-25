@@ -31,5 +31,8 @@ def main(root_dir):
 
 
 if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print('Usage: count_licenses.py </path/to/data>')
+        sys.exit()
     root_dir = sys.argv[1]
     main(root_dir)

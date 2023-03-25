@@ -1,7 +1,6 @@
-"""
-this script reads data from OpenAlex dump files (works type) and imports it into a local DB
-extracted are title, authors, citation counts, discipline info, open access URLs and IDs
-this version is adapted to fit the new OpenAlex structure including "locations" entities
+""" this script reads data from OpenAlex dump files (works type) and imports it into a local DB
+    extracted are title, authors, citation counts, discipline info, open access URLs and IDs
+    this version is adapted to fit the new OpenAlex structure including "locations" entities
 """
 
 import psycopg2

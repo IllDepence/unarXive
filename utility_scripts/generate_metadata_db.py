@@ -59,4 +59,7 @@ def gen_meta_db(in_fp):
 
 
 if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print('Usage: generate_metadata_db.py <arXiv_metadata_snapshot.json>')
+        sys.exit()
     gen_meta_db(sys.argv[1])

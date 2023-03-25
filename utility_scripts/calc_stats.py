@@ -1,3 +1,17 @@
+""" Calculate dataset stats across
+    - time (years / months)
+    - disciplines (see https://arxiv.org/category_taxonomy)
+
+    For
+    - paragraphs
+    - paragraph types
+    - references
+    - citation markers
+    - figures
+    - tables
+    - mathematical notation
+"""
+
 import json
 import os
 import sys
@@ -676,7 +690,7 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         livetest()
     if len(sys.argv) != 2:
-        print('Usage: calc_stats.py <root_dir>')
+        print('Usage: calc_stats.py </path/to/data>')
         sys.exit()
     root_dir = sys.argv[1]
     mtrs, idxs = calc_stats(root_dir)
