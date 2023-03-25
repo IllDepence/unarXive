@@ -35,19 +35,6 @@ PATT_EXT = re.compile('arxiv.org\/[a-z]+\/(.+)((.pdf)|(\?.*$)|(v\d+))', re.I)
 PATT_NORM = re.compile('arxiv.org\/[a-z]+\/(.+)$', re.I)
 PATT_DOI = re.compile(r'10.\d{4,9}/[-._;()/:A-Z0-9]+$', re.I)
 
-# check size of db
-# psql openalex
-# SELECT pg_size_pretty (pg_database_size ('papers'));
-# Length:
-# SELECT COUNT(1) FROM papers;
-
-# find entries with arxive ID
-# SELECT COUNT(*) FROM papers WHERE LENGTH(arxiv_id) >0;
-
-# TMUX
-# tmux ls
-# tmux at -t mysession
-# detach: Crtl + B, then D
 
 # method for extracting arxive IDs from url
 def extract_arxiv_id_from_url(url):
@@ -69,20 +56,6 @@ def extract_arxiv_id_from_url(url):
         success_flag = True
     return success_flag, arxiv_id
 
-# test the connection
-conn = psycopg2.connect(database="openalex")
-cursor = conn.cursor()
-cursor.execute("select version()")
-
-# Fetch a single row using fetchone() method.
-data = cursor.fetchone()
-print("Connection established to: ", data)
-
-# remove previous instance of table "papers" if existing
-
-cursor = conn.cursor()
-cursor.execute("DROP TABLE IF EXISTS papers")
-conn.commit()
 
 conn = psycopg2.connect(database="openalex")
 cursor = conn.cursor()
@@ -103,7 +76,7 @@ cursor.execute('''
 ''')
 conn.commit()
 
-print("Table 'papers' created successfully.")
+print("Table created successfully.")
 
 i = 0
 error_count = 0
@@ -124,13 +97,11 @@ for filename in glob.glob(os.path.join(input_dir_openalex_works_files, '*.gz')):
             try:
                 i += 1
                 json_data = json.loads(line.decode('utf-8'))
-
                 work_title_orig = json_data['title']
 
                 # normalize title
                 if work_title_orig is not None:
                     work_title_norm = normalize_title(work_title_orig)
-
                 else:
                     work_title_norm = ""
 
@@ -143,9 +114,7 @@ for filename in glob.glob(os.path.join(input_dir_openalex_works_files, '*.gz')):
                     work_author_list.append(work_author_norm)
 
                 work_author_list_str = str(work_author_list).replace('[', '{').replace(']', '}').replace("'", '"')
-
                 work_cited_by_count = json_data['cited_by_count']
-
                 ids = json_data.get('ids')
                 ids_list = []
 
@@ -175,7 +144,6 @@ for filename in glob.glob(os.path.join(input_dir_openalex_works_files, '*.gz')):
 
                 ids_list = str(ids_list).replace('[', '{').replace(']', '}').replace("'", '"')
 
-                #### NEW! ###
                 openalex_id = ids['openalex'].replace("https://openalex.org/", "")
 
                 # DOI value (not URL)
@@ -184,7 +152,7 @@ for filename in glob.glob(os.path.join(input_dir_openalex_works_files, '*.gz')):
                     if doi_short is not None:
                         if len(doi_short[0]) != 0:
                             doi_short = doi_short[0]
-                            #print(doi_short[0])
+                            # print(doi_short[0])
                     else:
                         doi_short = ""
 
@@ -214,8 +182,7 @@ for filename in glob.glob(os.path.join(input_dir_openalex_works_files, '*.gz')):
                         concept_name = ""
                         concept_url = ""
 
-
-                ### open access link + potentially arxiv ID from it
+                # open access link + potentially arxiv ID from it
                 oa_info = json_data['open_access']
                 arxiv_id = ""
                 oa_url = ""
@@ -223,19 +190,18 @@ for filename in glob.glob(os.path.join(input_dir_openalex_works_files, '*.gz')):
                 if oa_info is not None:
                     if oa_info['oa_url'] is not None:
                         oa_url = oa_info['oa_url']
-                        if "arxiv" in oa_url:  # optional check?!
-
+                        if "/arxiv" in oa_url:  # optional check?!
                             aid_group = PATT_EXT.search(oa_url)
                             success, arxiv_id = extract_arxiv_id_from_url(oa_url)
                             if success:
                                 arxiv_id_matching_success_count += 1
 
-
                 conn = psycopg2.connect(database="openalex")
                 cursor = conn.cursor()
                 cursor.execute(
                     "INSERT INTO papers (number, openalex_id, normalized_title, authors, discipline_name, discipline_url, citation_count, ids, doi, oa_url, arxiv_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                    (i, openalex_id, work_title_norm, work_author_list_str, concept_name, concept_url, work_cited_by_count, ids_list, doi_short, oa_url, arxiv_id))
+                    (i, openalex_id, work_title_norm, work_author_list_str, concept_name, concept_url,
+                     work_cited_by_count, ids_list, doi_short, oa_url, arxiv_id))
 
                 """
                 # example insert:
@@ -248,10 +214,6 @@ for filename in glob.glob(os.path.join(input_dir_openalex_works_files, '*.gz')):
 
             except Exception as e:
                 print(f'{e} error in line {i} of file {filename}')
-                # print('faulty data in:')
-                # print(json_data['title'],json_data['authorships'] )
-                # note: errors in most cases due to missing author name in OpenAlex data
-
                 error_count += 1
                 pass
 
@@ -262,5 +224,6 @@ print("------ DONE ------")
 print(f"Processed {i} lines")
 print(f"Encountered {error_count} errors")
 print("Success rate for reading and writing to postgresql db therefore: {:.2f}".format(100 * ((i - error_count) / i)))
-print(f"arxiv IDs determined through oa_url: {arxiv_id_matching_success_count} -- a rate of",(arxiv_id_matching_success_count/i))
+print(f"arxiv IDs determined through oa_url: {arxiv_id_matching_success_count} -- a rate of",
+      (arxiv_id_matching_success_count / i))
 print("#########")
