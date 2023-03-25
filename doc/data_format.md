@@ -2,10 +2,10 @@
 
 ### Overview
 
-unarXive is distributed in a compressed format (XZ). You therefore will probably want to first decompress (“unzip”) all the files in the data directory. This can be done
+unarXive is distributed as an XZ compressed TAR archive. You can unpack it using either of the following methods.
 
-* on the command line with [unxz](https://linux.die.net/man/1/xz).
-* graphically with [7zip](https://www.7-zip.org/).
+* On the command line using `tar -xJf`.
+* Graphically with [7zip](https://www.7-zip.org/).
 
 Each decompressed file `arXiv_src_<yy><mm>_<num>.jsonl` is in the [JSON Lines format](https://jsonlines.org/). This means each line is a JSON object and can, for example, be loaded in Python with `json.loads(some_line)`.
 
@@ -20,6 +20,7 @@ Papers are represented as shown in the example below, which is an excerpt from t
   "_source_hash": "b7d5f27b5c8abc3bd8a44d875899fdc0d945a604",
   "_source_name": "2105.05862.gz",
   "metadata": {...},
+  "discipline": "Physics",
   "abstract": {...},
   "body_text": [...],
   "bib_entries": {...},
@@ -74,6 +75,7 @@ and `{{cite:bc9a8ca19785627a087ae0c01abe155c22388e16}}`, for example, refers in 
       "end": 117
     }
   ],
+  "discipline": "Physics",
   "ids" {...}
 }
 ```
@@ -87,6 +89,7 @@ Papers (JSON objects saved as a single line in a JSONL file) have the following 
 * `_source_hash`: SHA1 hash of the arXiv source file
 * `_source_name`: name of the arXiv source file
 * `metadata`: paper metadata from kaggle.com/datasets/Cornell-University/arxiv
+* `discipline`: scientific discipline of the paper
 * `abstract`: paper abstract copied from metadata
 * `body_text`: list of paper content sections (paragraphs, listings, etc.)
     * `section`: section name
@@ -116,6 +119,7 @@ Papers (JSON objects saved as a single line in a JSONL file) have the following 
         * `text`: text segment in reference that the link was attached to
         * `start`: starting character offset in bib_entry_raw
         * `end`: ending character offset in bib_entry_raw
+    * `discipline`: scientific discipline of the cited paper
     * `ids`: matched identifiers of referenced paper
         * `open_alex_id`: referenced paper’s OpenAlex ID
         * `sem_open_alex_id`: referenced paper’s  SemOpenAlex ID
