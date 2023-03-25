@@ -223,8 +223,21 @@ def prep(root_dir):
                 # metadata
                 metadata = ppr.get('metadata', {})
                 license_url = metadata.get('license', None)
-                if license_url is None or \
-                        'http://creativecommons.org/' not in license_url:
+                if license_url is None or license_url not in [
+                    # only use papers licensed such that result can be
+                    # shared as cc by-sa 4.0 — i.e. no nc and no nd
+                    # (could opt for using by-nc-sa and get ~15k more
+                    #  papers, but at ~200k it’s not a huge gain and
+                    #  requires restricting the use of the ML data)
+                    'http://creativecommons.org/licenses/by/4.0/',  # 130k
+                    'http://creativecommons.org/licenses/by/3.0/',  # 6k
+                    'http://creativecommons.org/licenses/by-sa/4.0/',  # 8k
+                    'http://creativecommons.org/publicdomain/zero/1.0/',  # 8k
+                    'http://creativecommons.org/licenses/publicdomain/',  # 2k
+                    # 'http://creativecommons.org/licenses/by-nc-sa/3.0/',  4k
+                    # 'http://creativecommons.org/licenses/by-nc-sa/4.0/',  18k
+                    # 'http://creativecommons.org/licenses/by-nc-nd/4.0/',  18k
+                ]:
                     # skip non premissively licensed
                     continue
                 authors = metadata.get('authors', None)
