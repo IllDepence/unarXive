@@ -3,7 +3,7 @@
 **Access**
 
 * Data Set on Zenodo: [full](https://doi.org/10.5281/zenodo.7752754) / [permissively licensed subset](https://doi.org/10.5281/zenodo.7752615)
-* [Data Sample](doc/data_same.tar.gz)
+* [Data Sample](doc/unarXive_data_sample.tar.gz)
 * ML Data on Hugging Face: [citation recommendation](https://huggingface.co/datasets/saier/unarXive_citrec) / [IMRaD classification](https://huggingface.co/datasets/saier/unarXive_imrad_clf)
 
 **Documentation**
