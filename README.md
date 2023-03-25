@@ -20,7 +20,7 @@
   <img src="https://codebase.helmholtz.cloud/tarek.saier/hiwi_task_220629_latexparse/-/raw/s2orc_output_format/doc/schema.svg" alt="unarXive schema" width="100%">
 </p>
 
-unarXive contains
+**unarXive contains**
 
 * 1.9 M structured paper full-texts, containing
     * 63 M references (28 M linked to OpenAlex)
@@ -29,9 +29,9 @@ unarXive contains
     * 2 M table captions
     * 742 M pieces of mathematical notation perserved as LaTeX
 
-A comprehensive documentation of the data format be found [here](doc/data_format.md).
+A comprehensive documentation of the **data format** be found [here](doc/data_format.md).
 
-You can find a **data sample** [here](doc/data_same.tar.gz).
+You can find a **data sample** [here](doc/unarXive_data_sample.tar.gz).
 
 # Usage
 
