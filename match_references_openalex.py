@@ -152,7 +152,8 @@ def find_title_in_crossref_by_doi(given_doi):
     """
 
     doi_base_url = "https://api.crossref.org/works/"
-    mail = 'tarek,saier@kit.edu'
+    mail = ''  # Add your e-mail here
+    assert(len(mail)) > 0  # check if e-mail is present
     req = '{}{}?mailto={}'.format(
         doi_base_url,
         given_doi,
@@ -663,11 +664,6 @@ def extend_parsed_arxiv_chunk(params):
 def match(
         in_dir, out_dir, match_db_host, meta_db_uri, grobid_host, num_workers
 ):
-    # in_dir = '/opt/unarXive_2022/arxiv_parsed'
-    # out_dir = '/opt/unarXive_2022/parsed_data_enriched/'
-    # match_db_host = '129.13.152.175'
-    # meta_db_uri = 'arxiv-metadata-oai-snapshot_230101.sqlite'
-    # grobid_host = '129.13.152.175'
 
     # get list of JSONLs already processed
     matching_log_dir = 'logs'
@@ -721,7 +717,10 @@ def match(
 
 if __name__ == '__main__':
     if len(sys.argv) != 7:
-        print('usage ...')
+        print((
+            'Usage: python3 match_references_openalex.py <in_dir> <out_dir> '
+            '<match_db_host> <meta_db_uri> <grobid_host> <num_workers>'
+        ))
         sys.exit()
 
     in_dir = sys.argv[1]

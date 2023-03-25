@@ -7,7 +7,8 @@ provided the item matching against the OpenAlex data is successful
 from arxiv_taxonomy import GROUPS, ARCHIVES, CATEGORIES
 from functools import lru_cache
 import psycopg2
-import os, json
+import os
+import json
 from multiprocessing import Pool
 from collections import OrderedDict
 import sys
@@ -191,7 +192,10 @@ def extend_enhanced_arxiv_chunk(jsonl_file_path):
 
 if __name__ == '__main__':
     if len(sys.argv) != 7:
-        print('usage <in_dir> <out_dir> <openalex_db> <CPU workers>')
+        print((
+            'Usage: python3 extend_matched.py <in_dir> <out_dir> '
+            '<openalex_db> <CPU workers>'
+        ))
         sys.exit()
 
     input_dir_enhanced_output_jsons = sys.argv[1]  # r'/demo_in'
