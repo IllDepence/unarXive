@@ -2,9 +2,9 @@
 
 **Access**
 
-* Data Set on Zenodo: [full](https://doi.org/10.5281/zenodo.TODO) / [permissively licensed subset](https://doi.org/10.5281/zenodo.TODO)
+* Data Set on Zenodo: [full](https://doi.org/10.5281/zenodo.7752754) / [permissively licensed subset](https://doi.org/10.5281/zenodo.7752615)
 * [Data Sample](doc/data_same.tar.gz)
-* ML Data on Huggingface: [citation recommendation](https://huggingface.co/datasets/saier/citrec) / [IMRaD classification](https://huggingface.co/datasets/saier/unarXive_imrad_clf)
+* ML Data on Hugging Face: [citation recommendation](https://huggingface.co/datasets/saier/unarXive_citrec) / [IMRaD classification](https://huggingface.co/datasets/saier/unarXive_imrad_clf)
 
 **Documentation**
 
@@ -22,7 +22,12 @@
 
 unarXive contains
 
-* ...
+* 1.9 M structured paper full-texts, containing
+    * 63 M references (28 M linked to OpenAlex)
+    * 134 M in-text citation markers (65 M linked)
+    * 9 M figure captions
+    * 2 M table captions
+    * 742 M pieces of mathematical notation perserved as LaTeX
 
 A comprehensive documentation of the data format be found [here](doc/data_format.md).
 
@@ -30,9 +35,9 @@ You can find a **data sample** [here](doc/data_same.tar.gz).
 
 # Usage
 
-### Huggingface Datasets
+### Hugging Face Datasets
 
-If you want to use unarXive for *citation recommendation* or *IMRaD classification*, you can simply use our Huggingface datasets:
+If you want to use unarXive for *citation recommendation* or *IMRaD classification*, you can simply use our Hugging Face datasets:
 
 * [Citation Recommendation](https://huggingface.co/datasets/saier/unarxive_citrec)
 * [IMRaD Classification](https://huggingface.co/datasets/saier/unarXive_imrad_clf)
@@ -42,18 +47,18 @@ For example, in the case of citation recommendation:
 ```
 from datasets import load_dataset
 
-unarxive_citrec = load_dataset('saier/unarxive_citrec')
-unarxive_citrec = imrad.class_encode_column('label')  # set class label
-unarxive_citrec = imrad_wclass.remove_columns('_id')  # remove _id column
+citrec_data = load_dataset('saier/unarxive_citrec')
+citrec_data = citrec_data.class_encode_column('label')  # assign target label column
+citrec_data = citrec_data.remove_columns('_id')         # remove sample ID column
 ```
 
 # Development
 
-(For instructions how to re-create or extend unarXive, see [doc/recreate.md](doc/recreate.md).
+For instructions how to re-create or extend unarXive, see [doc/recreate.md](doc/recreate.md).
 
 **Versions**
 
-* Current release (1991–2022): see [*Access* section above](#access)
+* Current release (1991–2022): see [*Access* section above](#unarxive)
 * Previous releases ([old format](https://github.com/IllDepence/unarXive/tree/legacy_2020/)):
     * [1991–Jul 2020](https://zenodo.org/record/4313164)
     * [1991–2019](https://zenodo.org/record/3385851)
