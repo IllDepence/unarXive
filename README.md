@@ -8,7 +8,7 @@
 
 **Documentation**
 
-* Papers: [*Scientometrics* 2020](http://link.springer.com/article/10.1007/s11192-020-03382-z) / [JCDL 2023](https://dl.acm.org/doi/abs/TODO)
+* Papers: [*Scientometrics* 2020](http://link.springer.com/article/10.1007/s11192-020-03382-z) <!--/ [arXiv](https://arxiv.org/abs/yymm.xxxxx)-->
 * [Data Format](#data)
 * [Usage](#usage)
 * [Development](#development)
@@ -54,7 +54,7 @@ citrec_data = citrec_data.remove_columns('_id')         # remove sample ID colum
 
 # Development
 
-For instructions how to re-create or extend unarXive, see [doc/recreate.md](doc/recreate.md).
+For instructions how to re-create or extend unarXive, see [src/README.md](src/README.md).
 
 **Versions**
 
