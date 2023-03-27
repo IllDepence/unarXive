@@ -1,5 +1,7 @@
 # Data Format
 
+The following documents the data accessible on Zenodo here:  [full](https://doi.org/10.5281/zenodo.7752754) / [permissively licensed subset](https://doi.org/10.5281/zenodo.7752615)
+
 ### Overview
 
 unarXive is distributed as an XZ compressed TAR archive. You can unpack it using either of the following methods.

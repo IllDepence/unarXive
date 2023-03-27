@@ -27,7 +27,7 @@
     * 134 M in-text citation markers (65 M linked)
     * 9 M figure captions
     * 2 M table captions
-    * 742 M pieces of mathematical notation perserved as LaTeX
+    * 742 M pieces of mathematical notation preserved as LaTeX
 
 A comprehensive documentation of the **data format** be found [here](doc/data_format.md).
 
@@ -54,7 +54,7 @@ citrec_data = citrec_data.remove_columns('_id')         # remove sample ID colum
 
 # Development
 
-For instructions how to re-create or extend unarXive, see [src/README.md](src/README.md).
+For instructions how to re-create or extend unarXive, see [src/](src/).
 
 **Versions**
 
