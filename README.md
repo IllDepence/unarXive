@@ -17,7 +17,7 @@
 # Data
 
 <p align="center">
-  <img src="https://codebase.helmholtz.cloud/tarek.saier/hiwi_task_220629_latexparse/-/raw/s2orc_output_format/doc/schema.svg" alt="unarXive schema" width="100%">
+  <img src="https://raw.githubusercontent.com/IllDepence/unarXive/master/doc/schema.svg" alt="unarXive schema" width="100%">
 </p>
 
 **unarXive contains**
