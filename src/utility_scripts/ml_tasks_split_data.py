@@ -105,6 +105,7 @@ def split(fn_to_split, fn_license_info, dev_test_size, single_disc):
             if lbl in usable_labels:
                 # pre-allocation to ensure each usable sample appears
                 # at least once in each split
+                pre_allocated = False
                 for (split_key, fill_counter) in [
                     ('test', test_fill_curr['label']),
                     ('dev', dev_fill_curr['label']),
@@ -118,9 +119,11 @@ def split(fn_to_split, fn_license_info, dev_test_size, single_disc):
                         )
                         smpls_split[split_key].extend(clean_smpls)
                         fill_counter[lbl] += 1
+                        pre_allocated = True
                         break  # don’t assign to other splits
                 # rest is used for stratified samples
-                smpls_usable.append(smpl)
+                if not pre_allocated:
+                    smpls_usable.append(smpl)
         # if paper contains any usable samples
         if len(smpls_usable) > 0:
             # re-create paper with only usable samples
@@ -130,12 +133,12 @@ def split(fn_to_split, fn_license_info, dev_test_size, single_disc):
                     ppr_usable[k] = v
             ppr_usable[sample_key] = smpls_usable
             smpl_packs_usable.append(ppr_usable)
-    # print('num usable labels:')
-    # print(len(usable_labels))
-    # print('num smpl packs:')
-    # print(len(smpl_packs))
-    # print('num usable smpl packs:')
-    # print(len(smpl_packs_usable))
+    print('num usable labels:')
+    print(len(usable_labels))
+    print('num smpl packs:')
+    print(len(smpl_packs))
+    print('num usable smpl packs:')
+    print(len(smpl_packs_usable))
     # import pprint
     # for (split_key, fill_counter) in [
     #     ('test', test_fill_curr['label']),
@@ -144,8 +147,8 @@ def split(fn_to_split, fn_license_info, dev_test_size, single_disc):
     # ]:
     #     print(f'{split_key}:')
     #     pprint.pprint(fill_counter)
-    # for split_name, smpls in smpls_split.items():
-    #     print(f'#{split_name} samples: {len(smpls)}')
+    for split_name, smpls in smpls_split.items():
+        print(f'#{split_name} samples: {len(smpls)}')
     # sys.exit()
     smpl_packs = smpl_packs_usable
     # # determine total distribution of stratification dimensions
