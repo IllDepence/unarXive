@@ -1,163 +1,72 @@
 # unarXive
 
-This repository contains
-* [Helpful information for using the unarXive data set](#usage)
-* [Instructions on how to (re)create the data set](#recreating-unarxive)
-* [Citation information](cita-as)
+**Access**
 
-Further links
-* [Article in *Scientometrics*](http://link.springer.com/article/10.1007/s11192-020-03382-z)
-* [Data Set on Zenodo](https://doi.org/10.5281/zenodo.2553522)
+* Data Set on Zenodo: [full](https://doi.org/10.5281/zenodo.7752754) / [permissively licensed subset](https://doi.org/10.5281/zenodo.7752615)
+* [Data Sample](doc/unarXive_data_sample.tar.gz)
+* ML Data on Hugging Face: [citation recommendation](https://huggingface.co/datasets/saier/unarXive_citrec) / [IMRaD classification](https://huggingface.co/datasets/saier/unarXive_imrad_clf)
 
-## Development status
+**Documentation**
 
-We are currently working on an **updated version** of unarXive containing all arXiv.org submissions from **1991–2022**.
+* Papers: [*Scientometrics* 2020](http://link.springer.com/article/10.1007/s11192-020-03382-z) <!--/ [arXiv](https://arxiv.org/abs/yymm.xxxxx)-->
+* [Data Format](#data)
+* [Usage](#usage)
+* [Development](#development)
+* [Cite](#cite-as)
 
-* **Data format**
-    * now very close to that [S2ORC](https://github.com/allenai/s2orc), for easier adoption
-    * documents structured into paragraphs
-    * reference links directly with the paper instead of in an external database
-* **New content**
-    * mathematical notation preserved as LaTeX
-    * captions of figures and tables
-    * [metadata](https://www.kaggle.com/datasets/Cornell-University/) directly included for easier filtering
-    * references linked to [OpenAlex](https://openalex.org/)
+# Data
 
-**More info**, a preleminary data sample, etc. [can be found here](README_update2022.md).
+<p align="center">
+  <img src="https://codebase.helmholtz.cloud/tarek.saier/hiwi_task_220629_latexparse/-/raw/s2orc_output_format/doc/schema.svg" alt="unarXive schema" width="100%">
+</p>
 
-## Usage
+**unarXive contains**
 
-The unarXive data set contains
-* full text papers in plain text (`papers/`)
-* a database with bibliographic interlinkings (`papers/refs.db`)
-* pre-extracted citation-contexts (`contexts/extracted_contexts.csv`) (see [README_contexts.md](README_contexts.md))
-* and a script for extracting citation-contexts (`code/extract_contexts.py`)
+* 1.9 M structured paper full-texts, containing
+    * 63 M references (28 M linked to OpenAlex)
+    * 134 M in-text citation markers (65 M linked)
+    * 9 M figure captions
+    * 2 M table captions
+    * 742 M pieces of mathematical notation perserved as LaTeX
 
-‌  
+A comprehensive documentation of the **data format** be found [here](doc/data_format.md).
 
-![](https://github.com/IllDepence/unarXive/raw/master/doc/structure.png)
+You can find a **data sample** [here](doc/unarXive_data_sample.tar.gz).
 
-### Data Sample
-You can find a small sample of the data set in [doc/unarXive_sample.tar.bz2](https://github.com/IllDepence/unarXive/blob/master/doc/unarXive_sample.tar.bz2). (Generation procedure of the sample is documented in `unarXive_sample/paper_centered_sample/README` within the archive. Furthermore, the code used for sampling is provided.)
+# Usage
 
-### Usage examples
+### Hugging Face Datasets
 
-##### Citation contexts
+If you want to use unarXive for *citation recommendation* or *IMRaD classification*, you can simply use our Hugging Face datasets:
 
-Load the pre-exported citation contexts into a pandas data frame.
+* [Citation Recommendation](https://huggingface.co/datasets/saier/unarxive_citrec)
+* [IMRaD Classification](https://huggingface.co/datasets/saier/unarXive_imrad_clf)
+
+For example, in the case of citation recommendation:
 
 ```
-import csv
-import sys
-import pandas as pd
+from datasets import load_dataset
 
-# read in unarXive citation contexts
-csv.field_size_limit(sys.maxsize)
-df_contexts = pd.read_csv(
-    'contexts/extracted_contexts.csv',
-    names = [
-        'cited_mag_id',
-        'adjacent_citations_mag_ids',
-        'citig_mid',
-        'cited_arxiv_id',
-        'adjacent_citations_arxiv_ids',
-        'citig_arxiv_id',
-        'citation_context'
-        ],
-    sep = '\u241E',
-    engine = 'python',
-    quoting = csv.QUOTE_NONE
-)
-# adjacent_*_ids values are seperated by \u241F
-
-df_contexts
+citrec_data = load_dataset('saier/unarxive_citrec')
+citrec_data = citrec_data.class_encode_column('label')  # assign target label column
+citrec_data = citrec_data.remove_columns('_id')         # remove sample ID column
 ```
 
-##### References database
+# Development
 
-Get the citation counts of the most cited computer science papers.
+For instructions how to re-create or extend unarXive, see [src/README.md](src/README.md).
 
-```
-$ sqlite3 refs.db
-sqlite> select
-            bibitem.cited_arxiv_id,
-            count(distinct bibitem.citing_mag_id)
-        from
-            bibitem
-        join
-            arxivmetadata
-        on
-            bibitem.cited_arxiv_id = arxivmetadata.arxiv_id
-        where
-            arxivmetadata.discipline = 'cs'
-        group by
-            bibitem.cited_arxiv_id
-        order by
-            count(distinct bibitem.citing_mag_id)
-        desc;
-```
+**Versions**
 
-##### Paper full texts
+* Current release (1991–2022): see [*Access* section above](#unarxive)
+* Previous releases ([old format](https://github.com/IllDepence/unarXive/tree/legacy_2020/)):
+    * [1991–Jul 2020](https://zenodo.org/record/4313164)
+    * [1991–2019](https://zenodo.org/record/3385851)
 
-Extract citation contexts including identifiers of the citing and cited document.
+**Development Status**
 
-See `code/extract_contexts.py` in the data set.
+See [issues](https://github.com/IllDepence/unarXive/issues).
 
-## (re)creating unarXive
-Generating a data set for citation based tasks using arxiv.org submissions.
-
-### Prerequisites
-* software
-    * Tralics (Ubuntu: `# apt install tralics`)
-    * latexpand (Ubuntu: `# apt install texlive-extra-utils`)
-    * [Neural ParsCit](https://github.com/WING-NUS/Neural-ParsCit)
-* data
-    * arXiv source files: see [arXiv.org help - arXiv Bulk Data Access](https://arxiv.org/help/bulk_data)
-    * [MAG](https://www.microsoft.com/en-us/research/project/microsoft-academic-graph/) DB: see file `doc/MAG_DB_schema`
-    * arXiv title lookup DB: see file `aid_title.db.placeholder`
-
-### Setup
-* create virtual environment: `$ python3 -m venv venv`
-* activate virtual environment: `$ source venv/bin/activate`
-* install requirements: `$ pip install -r requirements.txt`
-* in `match_bibitems_mag.py`
-    * adjust line `mag_db_uri = 'postgresql+psycopg2://XXX:YYY@localhost:5432/MAG'`
-    * adjust line `doi_headers = { [...] working on XXX; mailto: XXX [...] }`
-    * depending on your arXiv title lookup DB, adjust line `aid_db_uri = 'sqlite:///aid_title.db'`
-* run Neural ParsCit web server ([instructions](https://github.com/WING-NUS/Neural-ParsCit#using-a-web-server))
-
-
-### Usage
-1. Extract plain texts and reference items with: `prepare.py` (or `normalize_arxiv_dump.py` + `prase_latex_tralics.py`)
-2. Match reference items with: `match_bibitems_mag.py`
-3. Clean txt output with: `clean_txt_output.py`
-4. Extend ID mappings
-    * Create mapping file with: `mag_id_2_arxiv_url_extend_arxiv_id.py` (see note in docstring)
-    * Extend IDs with `id_extend.py`
-5. Extract citation contexts with: `extract_contexts.py` (see `$ extract_contexts.py -h` for usage details)
-
-##### Example
-```
-$ source venv/bin/activate
-$ python3 prepare.py /tmp/arxiv-sources /tmp/arxiv-txt
-$ python3 match_bibitems_mag.py path /tmp/arxiv-txt 10
-$ python3 clean_txt_output.py /tmp/arxiv-txt
-$ psql MAG
-MAG=> \copy (select * from paperurls where sourceurl like '%arxiv.org%') to 'mag_id_2_arxiv_url.csv' with csv
-$ python3 mag_id_2_arxiv_url_extend_arxiv_id.py
-$ python3 id_extend.py /tmp/arxiv-txt/refs.db
-$ python3 extract_contexts.py /tmp/arxiv-txt \
-    --output_file context_sample.csv \
-    --sample_size 100 \
-    --context_margin_unit s \
-    --context_margin_pre 2 \
-    --context_margin_pre 0
-```
-
-
-### Evaluation of citation quality and coverage
-* For a manual evaluation of the reference resolution (`match_bibitems_mag.py`) we performed on a sample of 300 matchings, see `doc/matching_evaluation/`.
-* For a manual evaluation of citation coverage (compared to the MAG) we performed on a sample of 300 citations, see `doc/coverage_evaluation/`.
 
 ## Cite as
 ```

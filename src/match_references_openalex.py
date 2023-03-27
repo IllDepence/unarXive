@@ -1,0 +1,734 @@
+"""
+This script extends parsed arXiv chunks with a set of identifiers by matching the included publications
+against OpenAlex data in local DB and against an arXiv metadata table
+"""
+
+import psycopg2
+import json
+import os
+import glob
+import re
+import unidecode
+import unicodedata
+import sqlite3
+import requests
+import sys
+import traceback
+from bs4 import BeautifulSoup
+from datetime import datetime, time
+from multiprocessing import Pool
+from collections import OrderedDict
+
+ARXIV_URL_PATT = re.compile(
+    r'arxiv\.org\/[a-z0-9-]{1,10}\/(([a-z0-9-]{1,15}\/)?[\d\.]{4,9}\d)',
+    re.I
+)
+ARXIV_ID_PATT = re.compile(
+    r'arXiv:(([a-z0-9-]{1,15}\/)?[\d\.]{4,9}\d)',
+    re.I
+)
+ARXIV_ID_PATT_DATE = re.compile(
+    r'^([a-zA-Z-\.]+)?\/?(\d\d)(\d\d)(.*)$'
+)
+DOI_PATT = re.compile(
+    # a DOI at the *end* of the string
+    # NOTE: might match a "/" at the end
+    r'10.\d{4,9}/[-._;()/:A-Z0-9]+$',
+    re.I
+)
+FORMULA_PATT = re.compile(
+    r'\{\{formula:.{36}\}\}',
+    re.I
+)
+APS_DOI_PATT = re.compile(
+    r'('  # either
+    r'(rev\.\s*mod\.\s*phys\.?)'  # rev mod phys  -> g2
+    '|'  # or
+    r'(phys\.\s*rev\.\s*)'  # phys rev  -> g3
+    r')'
+    r'(([a-z]+\.? )+)[.,]?\s*'  # optional sequence of specifiers -> g4
+    #                           # e.g.: <none>, a, b, lett,
+    #                           #       accel beams, spec top phys ed res
+    r'(\d+)\s*'  # issue number  -> g6
+    r'(\([0-9a-z\s,.]+\))?[.,]?\s*'  # naughty year inbetween
+    r'([a-z]?\d+)',  # paper identifier (can contain a leading letter)  -> g8
+    re.I
+)
+
+
+def find_arxiv_id(text):
+    """ Loor for an arXiv ID within the given text.
+    """
+
+    match = ARXIV_ID_PATT.search(text)
+    if match:
+        return match.group(1)
+    else:
+        match = ARXIV_URL_PATT.search(text)
+        if match:
+            return match.group(1)
+    return False
+
+
+def identify_implicit_aps_journal_doi(bibstr):
+    """ Identify DOI information in physics references to
+        Journals of the American Physical Society.
+
+        Example in/outputs:
+
+        H. R. Riedl et al., Phys. Rev. 162, 692 (1967).
+            -> 10.1103/physrev.162.692
+
+        L. Davidovich et al., Phys. Rev. A 50, R895 (1994).
+            -> 10.1103/physreva.50.R895
+
+        Phys. Rev. B 88 (Jul, 2013) 045102
+            -> 10.1103/physrevb.88.045102
+
+        K. Zuza et al., Phys. Rev. Spec. Top. Phys. Ed. Res. 10, 010122 (2014).
+            -> 10.1103/PhysRevSTPER.10.010122
+
+        A. J. Leggett, Rev. Mod. Phys. 73, 307 (2001).
+            -> 10.1103/revmodphys.73.307
+    """
+
+    m = APS_DOI_PATT.search(bibstr)
+    if not m:
+        # no match
+        return None
+
+    aps_doi_numid = '10.1103'
+    rev_mod_phys = m.group(2)
+    phys_rev = m.group(3)
+    issue_number = m.group(6).lower()
+    paper_id = m.group(8).lower()
+    if rev_mod_phys is not None:
+        journal_id = 'revmodphys'
+    elif phys_rev is not None:
+        journal_id = 'physrev'
+    else:
+        # something went wrong
+        raise ValueError
+
+    # post processing of phys rev appendix match
+    phys_rev_spec = ''
+    phys_rev_spec_raw = m.group(4)
+    if phys_rev_spec_raw:
+        phys_rev_spec = re.sub(
+            '[\s.]+',
+            '',
+            phys_rev_spec_raw
+        ).lower()
+        if phys_rev_spec == 'spectopphysedres':
+            phys_rev_spec = 'stper'  # special case
+    # / post processing of phys rev appendix match
+
+    doi = '{}/{}{}.{}.{}'.format(
+        aps_doi_numid,
+        journal_id,
+        phys_rev_spec,
+        issue_number,
+        paper_id
+    )
+    return doi
+
+
+def title_lookup_in_arxiv_metadata_db(arxiv_id, cursor_arxiv, ppr_year, ppr_month):
+    # columns in table named paper:
+    # year, month, aid, title, json
+
+    query_aid_string = "SELECT  json from paper where year=? and month=? and aid=?"
+    # query_aid_string = "SELECT title from paper WHERE aid= ?"
+    metadata_tup = cursor_arxiv.execute(query_aid_string, (ppr_year, ppr_month, str(arxiv_id),)).fetchone()
+    try:
+        metadata = json.loads(metadata_tup[0])
+    except (TypeError, IndexError) as e:
+        return {}
+    return metadata.get('title', '')
+
+
+def find_title_in_crossref_by_doi(given_doi):
+    """ Given a DOI, try to get a work's title using crossref.org
+    """
+
+    doi_base_url = "https://api.crossref.org/works/"
+    mail = ''  # Add your e-mail here
+    assert(len(mail)) > 0  # check if e-mail is present
+    req = '{}{}?mailto={}'.format(
+        doi_base_url,
+        given_doi,
+        mail
+    )
+    try:
+        resp = requests.get(
+            req,
+            timeout=360
+        )
+
+        rate_lim_lim = resp.headers.get('X-Rate-Limit-Limit', '9001')
+        rate_lim_int = resp.headers.get(
+            'X-Rate-Limit-Interval',
+            '1s'
+        ).replace('s', '')
+    except requests.RequestException:
+        print("Request Exception")
+        return False
+    try:
+        wait = float(rate_lim_int) / float(rate_lim_lim)
+        if resp.elapsed.total_seconds() < wait:
+            delta = wait - resp.elapsed.total_seconds()
+            delta = max(delta, 3600)
+            time.sleep(delta)
+    except ValueError:
+        pass
+    if resp.status_code == 404:
+        # probably a faulty DOI
+        return False
+    try:
+        title = resp.json()['message']['title'][0]
+        # print(doi_metadata)
+        if title and len(title) > 0:
+            return title
+    except json.decoder.JSONDecodeError:
+        print("JSON decode error in Crossref response")
+        sys.exit()
+        return False
+
+
+def find_title_with_grobid_in_string(grobid_host, bib_ref_string):
+    grobid_url = 'http://' + grobid_host + ':8070/api/processCitation'
+    response = requests.post(grobid_url, data={'citations': bib_ref_string})
+
+    if response.status_code == 200:
+        return response.text
+    elif response.status_code == 204:
+        # no content could be extracted and structured
+        return False
+    else:
+        print('GROBID non 200 response:')
+        print('\tstatus_code: {}'.format(response.status_code))
+        print('\ttext: {}'.format(response.response.text))
+        return False
+
+
+def normalize_title(title_string):
+    title_string_norm = re.sub(r'[^\w]', ' ', title_string)
+    title_string_norm = re.sub(r'\s+', ' ', title_string_norm)
+    title_string_norm = unicodedata.normalize('NFD', title_string_norm)
+    title_string_norm = unidecode.unidecode(title_string_norm)
+    return title_string_norm.strip().lower()
+
+
+def normalize_author_name(author_string):
+    author_string_norm = re.sub(r'[^\w]', ' ', author_string)
+    author_string_norm = re.sub(r'\s+', ' ', author_string_norm)
+    author_string_norm = unicodedata.normalize('NFD', author_string_norm)
+    author_string_norm = unidecode.unidecode(author_string_norm)
+    return author_string_norm.strip().lower()
+
+
+def item_authors_in_ref_string(openalex_item_authors_list, ref_string):
+    any_author_in_ref_string = False
+    ref_string_normalized = normalize_author_name(ref_string)
+    for openalex_item_author in openalex_item_authors_list:
+        if openalex_item_author.split(" ")[-1] in ref_string_normalized.split(
+                " "):  # check occurence of author in token-wise ref string
+            # print(openalex_item_author.split(" ")[-1])  # last name
+            any_author_in_ref_string = True
+
+    return any_author_in_ref_string
+
+
+def vary_title_window(normalized_title_string):
+    title_tokenized = normalized_title_string.split(" ")
+    title_omit_first_token = title_tokenized[1:]
+    title_omit_first_token = " ".join(title_omit_first_token)
+    title_omit_last_token = title_tokenized[:-1]
+    title_omit_last_token = " ".join(title_omit_last_token)
+    return title_omit_first_token, title_omit_last_token
+
+
+def match_title_in_openalexdb(query_string, bib_entry_title_norm, bib_entry_ref_string, cursor,
+                              try_title_windows_flag):
+    cursor.execute(query_string, (bib_entry_title_norm,))
+    matching_openalex_pubs = cursor.fetchall()
+
+    # if only one result is found, proceed to handover IDs from openalexdb
+    if len(matching_openalex_pubs) == 1:
+
+        # look for authors in bib_entry_ref_string
+        openalex_item_authors_list = matching_openalex_pubs[0][2]
+        if item_authors_in_ref_string(openalex_item_authors_list, bib_entry_ref_string):
+            return matching_openalex_pubs[0]
+
+        # author not found in refstring
+        else:
+            return
+
+    # more than one possible title match found in openalexdb
+    elif len(matching_openalex_pubs) > 1:
+        matching_openalex_pubs_with_author_present = []
+        for match in matching_openalex_pubs:
+            openalex_item_authors_list = match[2]
+
+            # consider only the title matched pubs that have an author match with the ref string
+            if item_authors_in_ref_string(openalex_item_authors_list, bib_entry_ref_string):
+                matching_openalex_pubs_with_author_present.append(match)
+
+        # iterate through returned matches to identify and select the most cited
+        if len(matching_openalex_pubs_with_author_present) != 0:
+            citation_counts_of_matches = []
+            for match in matching_openalex_pubs_with_author_present:
+                citation_counts_of_matches.append(match[3])
+
+            index_of_most_cited_in_match_list = citation_counts_of_matches.index(max(citation_counts_of_matches))
+            matched_openalex_pub = matching_openalex_pubs_with_author_present[index_of_most_cited_in_match_list]
+            return matched_openalex_pub
+
+        else:
+            # Authors in OpenAlex for matched items all not present in ref string: no matches - skipped
+            return
+
+    # no match found -> try alternate title substrings and redo search
+    elif len(matching_openalex_pubs) == 0:
+        if try_title_windows_flag:
+            bib_entry_title_norm_omit_first, bib_entry_title_norm_omit_last = vary_title_window(bib_entry_title_norm)
+
+            matched_openalex_pub = match_title_in_openalexdb(query_string, bib_entry_title_norm_omit_first,
+                                                             bib_entry_ref_string, cursor, False)
+            if matched_openalex_pub is not None:
+                return matched_openalex_pub
+            else:
+                matched_openalex_pub = match_title_in_openalexdb(query_string, bib_entry_title_norm_omit_last,
+                                                                 bib_entry_ref_string, cursor, False)
+                if matched_openalex_pub is not None:
+                    return matched_openalex_pub
+                else:
+                    # occurs when no match is found for original, and both window versions of the bib_entry_title
+                    return
+        else:
+            # occurs when calling in 1st recursive call of 'match_title_in_openalexdb' function
+            return
+
+    else:
+        print(f"Unhandled matching scenario occurred. Bib ref string: {bib_entry_ref_string}")
+        return
+
+
+def map_ids_from_openalexdb_match_to_dict(matched_pub_from_db):
+    id_keys_in_output = ['open_alex_id', 'sem_open_alex_id', 'pubmed_id', 'pmc_id', 'doi']
+    openalexdb_match_ids = matched_pub_from_db[7]  # ids are in column [7] of the returned data from OpenAlex table
+    bib_entry_ids_dict = {}
+
+    # go through all ID types in openalexdb and add to temporary bib_entry_ids_dict
+    # recall openalexdb IDs column structure: list of IDs [oa_id, pubmedid, pmcid, doi]
+
+    bib_entry_ids_dict[id_keys_in_output[0]] = ""
+    if len(openalexdb_match_ids[0]) != 0:
+        bib_entry_ids_dict[id_keys_in_output[0]] = 'https://openalex.org/' + openalexdb_match_ids[0]
+
+    bib_entry_ids_dict[id_keys_in_output[1]] = ""
+    if len(openalexdb_match_ids[0]) != 0:
+        bib_entry_ids_dict[id_keys_in_output[1]] = 'https://semopenalex.org/work/' + openalexdb_match_ids[0]
+
+    #    ↓ field in `ids` dict ↓                ↓ [oa_id, pubmedid, pmcid, doi]
+    bib_entry_ids_dict[id_keys_in_output[2]] = openalexdb_match_ids[1]
+    bib_entry_ids_dict[id_keys_in_output[3]] = openalexdb_match_ids[2]
+    bib_entry_ids_dict[id_keys_in_output[4]] = openalexdb_match_ids[3]
+
+    return bib_entry_ids_dict
+
+
+def extend_parsed_arxiv_chunk(params):
+    jsonl_file_path, output_root_dir, match_db_host, meta_db_uri, grobid_host = params
+    i = 0
+    bib_item_counter = 0
+    bib_item_no_title_error_counter = 0
+    bib_item_title_not_in_openalex_error_counter = 0
+    saved_requests_counter = 0
+    start_time = datetime.now()
+
+    # create connection to local openalex database (with openalex and crossref tables)
+    conn = psycopg2.connect(
+        host=match_db_host,
+        database='openalex',
+        user='unarxive_matching',
+        password='over9000bibitems'
+    )
+    cursor = conn.cursor()
+
+    # connection to local arxiv db for lookup using arxiv ID
+    connection_arxiv_db = sqlite3.connect(meta_db_uri)
+    cursor_arxiv = connection_arxiv_db.cursor()
+
+    # check if folder exists
+    chunk_fn = os.path.basename(jsonl_file_path)
+    year_dir = os.path.split(os.getcwd())[1]
+    year_dir_path = os.path.join(output_root_dir, year_dir)
+    enriched_chunk_fp = os.path.join(year_dir_path, chunk_fn)
+    if not os.path.exists(year_dir_path):
+        os.makedirs(year_dir_path)
+
+    with open(enriched_chunk_fp, "w", encoding="utf-8") as output_chunk:
+        with open(jsonl_file_path, 'r', encoding='utf-8') as chunk:
+            print("Worker reading file ", jsonl_file_path, "..")
+            output_chunk_temp = ""
+            for publication in chunk:
+                try:
+                    json_data = json.loads(publication)
+
+                    # iterate through all bib_entries of current paper
+                    # entries have form:
+                    # {'bib_entry_raw': 'N. Doroud, J. Gomis, B. Le Floch, and S. Lee,
+                    # “Exact Results in D=2 Supersymmetric Gauge Theories,” JHEP 05 (2013) 093, arXiv:1206.2606 [hep-th].',
+                    # 'contained_arXiv_ids': ['1206.2606'], 'contained_links': ['http://dx.doi.org/10.1007/JHEP05(2013)093']}
+
+                    for bib_entry in json_data['bib_entries']:
+                        try:
+                            bib_item_counter += 1
+                            bib_entry_aid = None
+                            title = None
+                            grobid_flag = False
+
+                            json_data['bib_entries'][bib_entry]['ids'] = OrderedDict()
+                            json_data['bib_entries'][bib_entry]['ids']['open_alex_id'] = ""
+                            json_data['bib_entries'][bib_entry]['ids']['sem_open_alex_id'] = ""
+                            json_data['bib_entries'][bib_entry]['ids']['pubmed_id'] = ""
+                            json_data['bib_entries'][bib_entry]['ids']['pmc_id'] = ""
+                            json_data['bib_entries'][bib_entry]['ids']['doi'] = ""
+                            json_data['bib_entries'][bib_entry]['ids']['arxiv_id'] = ""
+
+                            # look for arxiv ID in parsed bib entry data
+                            if len(json_data['bib_entries'][bib_entry]['contained_arXiv_ids']) != 0:
+                                bib_entry_aid = json_data['bib_entries'][bib_entry]['contained_arXiv_ids']
+
+                            # look for arxiv ID in full ref string of bib item
+                            else:
+                                bib_entry_regex_test = find_arxiv_id(
+                                    json_data['bib_entries'][bib_entry]['bib_entry_raw'])
+                                if bib_entry_regex_test is not False:
+                                    bib_entry_aid = bib_entry_regex_test
+
+                            # if arxiv ID is determined either way, check metadata arxiv db to get clean title
+                            if bib_entry_aid is not None:
+
+                                try:
+                                    # if multiple arxiv ids or dict in parsed data of current bib item, choose first
+                                    if type(bib_entry_aid) is list:
+                                        if len(bib_entry_aid) != 0:
+                                            aid = str(bib_entry_aid[0]['id'])
+                                            aid_m = ARXIV_ID_PATT_DATE.match(aid)
+                                            aid_year = aid_m.group(2)
+                                            aid_month = aid_m.group(3)
+
+                                            title_from_arxive_meta_db = title_lookup_in_arxiv_metadata_db(
+                                                aid, cursor_arxiv, aid_year, aid_month)
+                                    else:
+                                        aid_m = ARXIV_ID_PATT_DATE.match(str(bib_entry_aid))
+                                        aid_year = aid_m.group(2)
+                                        aid_month = aid_m.group(3)
+                                        title_from_arxive_meta_db = title_lookup_in_arxiv_metadata_db(
+                                            str(bib_entry_aid),
+                                            cursor_arxiv, aid_year, aid_month)
+
+                                    if title_from_arxive_meta_db is not None:
+                                        if len(title_from_arxive_meta_db) != 0:
+                                            title = title_from_arxive_meta_db
+
+                                except IndexError as indexerror:
+                                    # indexerror encountered
+                                    pass
+
+                                except Exception as e:
+                                    print(e)
+                                    pass
+
+                            # retrieve title from crossref
+                            # (look for DOI in contained links and try
+                            #  to determine DOI for APS journals)
+                            doi_candidates = []
+                            if title is None:
+                                # check contained links
+                                if len(json_data['bib_entries'][bib_entry]['contained_links']) != 0:
+                                    # multiple urls possible in list
+                                    bib_item_urls = json_data['bib_entries'][bib_entry]['contained_links']
+                                    for url in bib_item_urls:
+                                        bib_item_doi_m = DOI_PATT.search(url)
+                                        if bib_item_doi_m:
+                                            bib_item_doi = bib_item_doi_m.group(0)
+                                            if bib_item_doi[-1] == '/':
+                                                bib_item_doi = bib_item_doi[:-1]
+                                            doi_candidates.append(
+                                                bib_item_doi
+                                            )
+                                # look for APS references
+                                aps_doi = identify_implicit_aps_journal_doi(
+                                    json_data['bib_entries'][bib_entry]['bib_entry_raw']
+                                )
+                                if aps_doi is not None:
+                                    doi_candidates = [aps_doi] + doi_candidates
+                                # work with DOIs found
+                                try:
+                                    for doi_candi in doi_candidates:
+                                        if title is not None:
+                                            break
+                                        # check whether there's already a title for this DOI in local crossref table
+                                        crossrefdb_title_query = "SELECT * from crossref WHERE doi=%s"
+                                        cursor.execute(crossrefdb_title_query, (doi_candi,))
+                                        crossref_matching_pub = cursor.fetchall()
+
+                                        if len(crossref_matching_pub) == 1:
+                                            title = crossref_matching_pub[0][1]
+                                            saved_requests_counter += 1
+
+                                        elif len(crossref_matching_pub) > 1:
+                                            title = crossref_matching_pub[0][1]
+                                            saved_requests_counter += 1
+
+                                        elif len(crossref_matching_pub) == 0:
+                                            crossref_api_result = find_title_in_crossref_by_doi(
+                                                doi_candi)
+                                            if crossref_api_result is not False:
+                                                title = crossref_api_result
+
+                                                # write title to db
+                                                cursor.execute(
+                                                    "INSERT INTO crossref (doi, title) VALUES (%s,%s)",
+                                                    (doi_candi, title))
+                                                conn.commit()
+
+
+                                except TypeError as te:  # FIXME: where would that occurr in the large block above?
+                                    pass
+
+                                # for the unprobable case that two threads look up the title for same DOI
+                                # at the same time and try to write to table (DOI is primary key)
+                                except psycopg2.IntegrityError as ie:
+                                    print(ie)
+                                    pass
+
+                            # find title with GROBID in ref string
+                            if title is None:
+                                bib_item_ref_string = json_data['bib_entries'][bib_entry]['bib_entry_raw']
+
+                                # remove quote characters from bib ref string (they disturb curl API call)
+                                bib_item_ref_string_clean = bib_item_ref_string.replace('"', '').replace("'",
+                                                                                                         "").replace(
+                                    '„', '').replace('“', '').replace('‟', '').replace('”', '').replace('`', '')
+
+                                # check for formula entries and replace with actual (latex) content
+                                match = FORMULA_PATT.search(bib_item_ref_string_clean)
+
+                                if match is not None:
+                                    # at least one formula in title
+                                    match = FORMULA_PATT.finditer(bib_item_ref_string_clean)
+                                    for m in match:
+                                        formula_ref_string = m.group(0)
+                                        formula_ref_key = formula_ref_string.replace("{{formula:", "").replace("}}", "")
+                                        bib_item_ref_string_clean = bib_item_ref_string_clean.replace(
+                                            formula_ref_string,
+                                            json_data['ref_entries'][
+                                                formula_ref_key][
+                                                'latex'])
+
+                                # get title from GROBID API
+                                grobid_bibstruct_xml = find_title_with_grobid_in_string(grobid_host,
+                                                                                        bib_item_ref_string_clean)
+
+                                if grobid_bibstruct_xml:
+                                    grobid_returned_data_xml = BeautifulSoup(grobid_bibstruct_xml, 'lxml')
+                                    grobid_title_results = grobid_returned_data_xml.findAll('title')
+
+                                    for t in grobid_title_results:
+
+                                        if title is None:
+                                            # grobid output marked as title:
+                                            # [<title level="a" type="main">The spectral radius of the Coxeter transformations for a generalized Cartan matrix</title>, <title level="j">Math. Ann</title>]
+                                            # key "type" not always present
+
+                                            try:
+                                                if t['type'] == "main":
+                                                    title = t.get_text(strip=True)
+                                                    grobid_flag = True
+                                                    # print(t['type'], title)
+                                            except KeyError as ke:
+                                                if t.get_text(strip=True) is not None:
+                                                    if len(t.get_text(strip=True)) is not 0:
+                                                        title = t.get_text(strip=True)
+                                                        grobid_flag = True
+                                                pass
+
+                            # no title identifiable for this ref string (is skipped)
+                            if title is None:
+                                bib_item_no_title_error_counter += 1
+
+                            # title is found and now used to check (local) OpenAlex database
+                            if title is not None:
+                                bib_item_title_norm = normalize_title(title)
+                                bib_item_ref_string = json_data['bib_entries'][bib_entry]['bib_entry_raw']
+
+                                # look at "left" 1000 characters in normalized title for lookup using index
+                                openalexdb_title_query = 'SELECT * from openalex WHERE ("left"(normalized_title::text, 1000)) = %s'
+
+                                matching_openalex_pub = match_title_in_openalexdb(openalexdb_title_query,
+                                                                                  bib_item_title_norm,
+                                                                                  bib_item_ref_string, cursor,
+                                                                                  grobid_flag)
+
+                                if matching_openalex_pub is None:
+                                    bib_item_title_not_in_openalex_error_counter += 1
+
+                                    # append empty ids dict.
+                                    json_data['bib_entries'][bib_entry]['ids'] = {}
+                                    json_data['bib_entries'][bib_entry]['ids']['open_alex_id'] = ""
+                                    json_data['bib_entries'][bib_entry]['ids']['sem_open_alex_id'] = ""
+                                    json_data['bib_entries'][bib_entry]['ids']['pubmed_id'] = ""
+                                    json_data['bib_entries'][bib_entry]['ids']['pmc_id'] = ""
+                                    json_data['bib_entries'][bib_entry]['ids']['doi'] = ""
+
+                                elif matching_openalex_pub is not None:
+                                    bib_entry_ids_dict = map_ids_from_openalexdb_match_to_dict(matching_openalex_pub)
+
+                                    # add data from OpenAlex to JSON object of current publication
+                                    json_data['bib_entries'][bib_entry]['ids']['open_alex_id'] = bib_entry_ids_dict[
+                                        'open_alex_id']
+                                    json_data['bib_entries'][bib_entry]['ids']['sem_open_alex_id'] = bib_entry_ids_dict[
+                                        'sem_open_alex_id']
+                                    json_data['bib_entries'][bib_entry]['ids']['pubmed_id'] = bib_entry_ids_dict[
+                                        'pubmed_id']
+                                    json_data['bib_entries'][bib_entry]['ids']['pmc_id'] = bib_entry_ids_dict['pmc_id']
+                                    json_data['bib_entries'][bib_entry]['ids']['doi'] = bib_entry_ids_dict[
+                                        'doi'].replace(
+                                        "https://doi.org/", "").replace("http://doi.org/", "")
+
+                        except Exception as be:
+                            # print(f"## Exception {be} in bib entry \n{bib_entry} \nof current pub. ##")
+                            pass
+                except Exception as ge:
+                    print("## General error: " + str(ge) + " ##")
+                    pass
+
+                finally:
+                    output_chunk_temp = output_chunk_temp + json.dumps(json_data) + "\n"
+
+            output_chunk.write(output_chunk_temp)
+
+            print(f"Worker done with chunk file {jsonl_file_path}. \nErrors in title determination in bibitems:",
+                  bib_item_no_title_error_counter, "/",
+                  bib_item_counter)
+            print("Success quota (fraction of titles successfully determined) = {:.2f}".format(
+                100 * ((bib_item_counter - bib_item_no_title_error_counter) / bib_item_counter)))
+
+            print("Error rate for title matching with OpenAlex for bibitems with determined title:",
+                  bib_item_title_not_in_openalex_error_counter, "/",
+                  (bib_item_counter - bib_item_no_title_error_counter),
+                  "\t | Success = {:.2f}".format(
+                      100 * ((
+                                     bib_item_counter - bib_item_title_not_in_openalex_error_counter - bib_item_no_title_error_counter) / (
+                                     bib_item_counter - bib_item_no_title_error_counter))))
+            print("Overall bib_item_matching_success_quota = {:.2f}".format((
+                                                                                    bib_item_counter - bib_item_no_title_error_counter - bib_item_title_not_in_openalex_error_counter) / bib_item_counter))
+
+            if not os.path.exists(output_root_dir + "logs"):
+                os.makedirs(output_root_dir + "logs")
+
+            # write log
+            with open(
+                    output_root_dir + "logs/" + jsonl_file_path.split("/")[-1] + "-matching-log.json",
+                    "w") as log_file:
+                end_time = datetime.now()
+
+                if bib_item_counter != 0:
+                    bib_item_matching_success_quota = (bib_item_counter - bib_item_no_title_error_counter - bib_item_title_not_in_openalex_error_counter) / bib_item_counter
+                else:
+                    bib_item_matching_success_quota = 0
+
+                d = {'start_time': start_time.ctime(),
+                     'end_time': end_time.ctime(),
+                     'runtime_seconds': (end_time - start_time).total_seconds(),
+                     'bib_items_processed': bib_item_counter,
+                     'bib_items_error_no_title': bib_item_no_title_error_counter,
+                     'bib_items_error_no_match_in_openalex': bib_item_title_not_in_openalex_error_counter,
+                     'bib_item_matching_success_quota': bib_item_matching_success_quota,
+                     'crossref_requests_saved': saved_requests_counter}
+
+                json.dump(d, log_file)
+                log_file.close()
+
+            chunk.close()
+        output_chunk.close()
+    conn.close()
+    connection_arxiv_db.close()
+
+
+def match(
+        in_dir, out_dir, match_db_host, meta_db_uri, grobid_host, num_workers
+):
+
+    # get list of JSONLs already processed
+    matching_log_dir = 'logs'
+    matching_log_suffix = '-matching-log.json'
+    matching_log_dir_path = os.path.join(out_dir, matching_log_dir)
+    done_fns = []
+    if os.path.exists(matching_log_dir_path):
+        for fn in os.listdir(matching_log_dir_path):
+            done_fns.append(
+                fn.replace(matching_log_suffix, '')
+            )
+
+    # get list of JSONLs to process
+    todo_fps = []
+    done_fns_found = []
+    for path_to_file, subdirs, files in os.walk(in_dir):
+        for fn in files:
+            fn_base, ext = os.path.splitext(fn)
+            if ext == '.jsonl':
+                # skip those already processed
+                if fn in done_fns:
+                    done_fns_found.append(fn)
+                    continue
+                fp = os.path.join(path_to_file, fn)
+                todo_fps.append(fp)
+
+    # create work param packaged for individual workers
+    worker_params = []
+    for input_file_path in todo_fps:
+        worker_params.append(
+            (
+                input_file_path,
+                out_dir,
+                match_db_host,
+                meta_db_uri,
+                grobid_host
+            )
+        )
+
+    # print((
+    #     f'{len(done_fns)} JSONLs already processed'
+    #     f' ({len(done_fns_found)} found)\n'
+    #     f'{len(todo_fps)} JSONLs to process'
+    # ))
+    # sys.exit()
+
+    pool = Pool(num_workers, maxtasksperchild=5)
+    pool.map(extend_parsed_arxiv_chunk, worker_params)
+    pool.close()
+
+
+if __name__ == '__main__':
+    if len(sys.argv) != 7:
+        print((
+            'Usage: python3 match_references_openalex.py <in_dir> <out_dir> '
+            '<match_db_host> <meta_db_uri> <grobid_host> <num_workers>'
+        ))
+        sys.exit()
+
+    in_dir = sys.argv[1]
+    out_dir = sys.argv[2]
+    match_db_host = sys.argv[3]
+    meta_db_uri = sys.argv[4]
+    grobid_host = sys.argv[5]
+    num_workers = int(sys.argv[6])
+    match(
+        in_dir, out_dir, match_db_host, meta_db_uri, grobid_host, num_workers
+    )
