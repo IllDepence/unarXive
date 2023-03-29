@@ -222,7 +222,7 @@ def parse(
         # write latex contents in a temporary xml file
         with tempfile.TemporaryDirectory() as tmp_dir_path:
             tmp_xml_path = os.path.join(tmp_dir_path, '{}.xml'.format(aid_fn_safe))
-            # run latexml
+            # run tralics
             tralics_args = ['tralics',
                             '-silent',
                             '-noxmlerror',
@@ -250,7 +250,7 @@ def parse(
             out.close()
             err.close()
 
-            # get plain text from latexml output
+            # get plain text from tralics output
             parser = etree.XMLParser()
 
             # check if smth went wrong with parsing latex to temporary xml file
