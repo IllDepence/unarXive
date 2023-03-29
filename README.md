@@ -8,7 +8,9 @@
 
 **Documentation**
 
-* Papers: [*Scientometrics* 2020](http://link.springer.com/article/10.1007/s11192-020-03382-z) <!--/ [arXiv](https://arxiv.org/abs/yymm.xxxxx)-->
+* Papers
+    * [*Scientometrics*](http://link.springer.com/article/10.1007/s11192-020-03382-z) (2020)
+    * JCDL 2023 ([preprint](https://arxiv.org/abs/2303.14957))
 * [Data Format](#data)
 * [Usage](#usage)
 * [Development](#development)
@@ -29,7 +31,7 @@
     * 2 M table captions
     * 742 M pieces of mathematical notation preserved as LaTeX
 
-A comprehensive documentation of the **data format** be found [here](doc/data_format.md).
+A comprehensive documentation of the **data format** can be found [here](doc/data_format.md).
 
 You can find a **data sample** [here](doc/unarXive_data_sample.tar.gz).
 
