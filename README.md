@@ -71,6 +71,22 @@ See [issues](https://github.com/IllDepence/unarXive/issues).
 
 
 ## Cite as
+
+
+**Current version**
+
+```
+@inproceedings{Saier2023unarXive,
+  author        = {Saier, Tarek and Krause, Johan and F\"{a}rber, Michael},
+  title         = {{unarXive 2022: All arXiv Publications Pre-Processed for NLP, Including Structured Full-Text and Citation Network}},
+  booktitle     = {Proceedings of the 23rd ACM/IEEE Joint Conference on Digital Libraries},
+  year          = {2023},
+  series        = {JCDL '23}
+}
+```
+
+**Initial publication**
+
 ```
 @article{Saier2020unarXive,
   author        = {Saier, Tarek and F{\"{a}}rber, Michael},
