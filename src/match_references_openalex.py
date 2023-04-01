@@ -153,7 +153,7 @@ def find_title_in_crossref_by_doi(given_doi):
 
     doi_base_url = "https://api.crossref.org/works/"
     mail = ''  # Add your e-mail here
-    assert(len(mail)) > 0  # check if e-mail is present
+    assert (len(mail)) > 0  # check if e-mail is present
     req = '{}{}?mailto={}'.format(
         doi_base_url,
         given_doi,
@@ -613,33 +613,38 @@ def extend_parsed_arxiv_chunk(params):
 
             output_chunk.write(output_chunk_temp)
 
-            print(f"Worker done with chunk file {jsonl_file_path}. \nErrors in title determination in bibitems:",
-                  bib_item_no_title_error_counter, "/",
-                  bib_item_counter)
-            print("Success quota (fraction of titles successfully determined) = {:.2f}".format(
-                100 * ((bib_item_counter - bib_item_no_title_error_counter) / bib_item_counter)))
+            if bib_item_counter != 0:
+                print(f"Worker done with chunk file {jsonl_file_path}. \nErrors in title determination in bibitems:",
+                      bib_item_no_title_error_counter, "/",
+                      bib_item_counter)
+                print("Success quota (fraction of titles successfully determined) = {:.2f}".format(
+                    100 * ((bib_item_counter - bib_item_no_title_error_counter) / bib_item_counter)))
 
-            print("Error rate for title matching with OpenAlex for bibitems with determined title:",
-                  bib_item_title_not_in_openalex_error_counter, "/",
-                  (bib_item_counter - bib_item_no_title_error_counter),
-                  "\t | Success = {:.2f}".format(
-                      100 * ((
-                                     bib_item_counter - bib_item_title_not_in_openalex_error_counter - bib_item_no_title_error_counter) / (
-                                     bib_item_counter - bib_item_no_title_error_counter))))
-            print("Overall bib_item_matching_success_quota = {:.2f}".format((
-                                                                                    bib_item_counter - bib_item_no_title_error_counter - bib_item_title_not_in_openalex_error_counter) / bib_item_counter))
+                print("Error rate for title matching with OpenAlex for bibitems with determined title:",
+                      bib_item_title_not_in_openalex_error_counter, "/",
+                      (bib_item_counter - bib_item_no_title_error_counter),
+                      "\t | Success = {:.2f}".format(
+                          100 * ((bib_item_counter - bib_item_title_not_in_openalex_error_counter -
+                                  bib_item_no_title_error_counter) / (
+                                         bib_item_counter - bib_item_no_title_error_counter))))
+                print("Overall bib_item_matching_success_quota = {:.2f}".format((bib_item_counter -
+                                                                                 bib_item_no_title_error_counter -
+                                                                                 bib_item_title_not_in_openalex_error_counter) / bib_item_counter))
+            else:
+                print("Bib item count is 0! No bibliography items in current publications?")
 
+                # write log
             if not os.path.exists(output_root_dir + "logs"):
                 os.makedirs(output_root_dir + "logs")
 
-            # write log
             with open(
                     output_root_dir + "logs/" + jsonl_file_path.split("/")[-1] + "-matching-log.json",
                     "w") as log_file:
                 end_time = datetime.now()
 
                 if bib_item_counter != 0:
-                    bib_item_matching_success_quota = (bib_item_counter - bib_item_no_title_error_counter - bib_item_title_not_in_openalex_error_counter) / bib_item_counter
+                    bib_item_matching_success_quota = (bib_item_counter - bib_item_no_title_error_counter -
+                                                       bib_item_title_not_in_openalex_error_counter) / bib_item_counter
                 else:
                     bib_item_matching_success_quota = 0
 
@@ -664,7 +669,6 @@ def extend_parsed_arxiv_chunk(params):
 def match(
         in_dir, out_dir, match_db_host, meta_db_uri, grobid_host, num_workers
 ):
-
     # get list of JSONLs already processed
     matching_log_dir = 'logs'
     matching_log_suffix = '-matching-log.json'
