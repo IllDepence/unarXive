@@ -11,7 +11,7 @@ unarXive is distributed as an XZ compressed TAR archive. You can unpack it using
 
 Each decompressed file `arXiv_src_<yy><mm>_<num>.jsonl` is in the [JSON Lines format](https://jsonlines.org/). This means each line is a JSON object and can, for example, be loaded in Python with `json.loads(some_line)`.
 
-Papers are represented as shown in the example below, which is an excerpt from the paper `2105.05862` from the file `arXiv_src_2105_034.jsonl`). A full documentation of data fields is given [further down](#data-format).
+Papers are represented as shown in the example below, which is an excerpt from the paper `2105.05862` from the file `arXiv_src_2105_034.jsonl`. A full documentation of data fields is given [further down](#data-format).
 
 **Paper object**
 
@@ -131,4 +131,4 @@ Papers (JSON objects saved as a single line in a JSONL file) have the following 
 * `ref_entries`: list of non-textual content (figures, formulas, etc.)
     * `type`: content type
     * `caption`: table/figure caption (if `type` is table or figure)
-    * `latex`: content of LaTeX math mode (if `type is formula)
+    * `latex`: content of LaTeX math mode (if `type` is formula)
