@@ -10,7 +10,7 @@
 
 * Papers
     * [*Scientometrics*](http://link.springer.com/article/10.1007/s11192-020-03382-z) (2020)
-    * JCDL 2023 ([preprint](https://arxiv.org/abs/2303.14957))
+    * [*JCDL 2023*](https://doi.org/10.1109/JCDL57899.2023.00020) (2023)
 * [Data Format](#data)
 * [Usage](#usage)
 * [Development](#development)
@@ -79,9 +79,13 @@ See [issues](https://github.com/IllDepence/unarXive/issues).
 @inproceedings{Saier2023unarXive,
   author        = {Saier, Tarek and Krause, Johan and F\"{a}rber, Michael},
   title         = {{unarXive 2022: All arXiv Publications Pre-Processed for NLP, Including Structured Full-Text and Citation Network}},
-  booktitle     = {Proceedings of the 23rd ACM/IEEE Joint Conference on Digital Libraries},
+  booktitle     = {2023 ACM/IEEE Joint Conference on Digital Libraries (JCDL)},
   year          = {2023},
-  series        = {JCDL '23}
+  pages         = {66--70},
+  month         = jun,
+  doi           = {10.1109/JCDL57899.2023.00020},
+  publisher     = {IEEE Computer Society},
+  address       = {Los Alamitos, CA, USA},
 }
 ```
 
