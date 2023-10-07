@@ -8,9 +8,9 @@
 
 **Documentation**
 
-* Papers
-    * [*Scientometrics*](http://link.springer.com/article/10.1007/s11192-020-03382-z) (2020)
-    * [*JCDL 2023*](https://doi.org/10.1109/JCDL57899.2023.00020) (2023)
+* Publications
+    * [*Scientometrics*](http://link.springer.com/article/10.1007/s11192-020-03382-z) ([author copy](https://www.aifb.kit.edu/images/f/f9/UnarXive_Scientometrics2020.pdf)) (2020)
+    * [*JCDL 2023*](https://doi.org/10.1109/JCDL57899.2023.00020) ([author copy](https://doi.org/10.48550/arXiv.2303.14957)) (2023)
 * [Data Format](#data)
 * [Usage](#usage)
 * [Development](#development)
